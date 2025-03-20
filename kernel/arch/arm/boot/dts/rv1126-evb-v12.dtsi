@@ -34,22 +34,23 @@
 			};
 		};
 	};
+		status = "disabled";
 };
 
 &imx335 {
-        reset-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+		status = "disabled";
 };
 
 &imx415 {
-        reset-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+		status = "disabled";
 };
 
 &ov4689 {
-	reset-gpios = <&gpio2 RK_PA0 GPIO_ACTIVE_LOW>;
+		status = "disabled";
 };
 
 &os04a10 {
-	reset-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+		status = "disabled";
 };
 
 &npu {

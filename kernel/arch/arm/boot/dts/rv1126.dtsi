@@ -31,8 +31,8 @@
 		i2c4 = &i2c4;
 		i2c5 = &i2c5;
 		mmc0 = &emmc;
-		mmc1 = &sdio;
-		mmc2 = &sdmmc;
+		mmc1 = &sdmmc;
+		mmc2 = &sdio;
 		serial0 = &uart0;
 		serial1 = &uart1;
 		serial2 = &uart2;
@@ -334,7 +334,7 @@
 		rockchip,irq-mode-enable = <0>;
 		rockchip,baudrate = <1500000>;  /* Only 115200 and 1500000 */
 		interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
-		status = "disabled";
+		status = "enabled";
 	};
 
 	firmware {
@@ -2364,7 +2364,7 @@
 		max-frequency = <200000000>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_det &sdmmc0_bus4>;
-		status = "disabled";
+		status = "enabled";
 	};
 
 	sdio: dwmmc@ffc70000 {
