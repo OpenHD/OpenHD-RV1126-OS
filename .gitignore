@@ -61,3 +61,4 @@ external/rockface/sdk/rockface-data-rv1109/face_mask_recognition.data
 external/rockit/mpi/example/res/vplay/test_1080p.ts
 output/
 overlay/
+.repo/
