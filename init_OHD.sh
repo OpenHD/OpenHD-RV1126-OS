@@ -11,7 +11,7 @@ SCIEBO_USERNAME="$1"
 SCIEBO_PASSWORD="$2"
 
 # File path in Sciebo
-FILE_PATH="https://uni-wuppertal.sciebo.de/remote.php/webdav/openhd/X21/RV1126_RV1109_LINUX_SDK_V3.0.4_20240531.tar.bz2"
+FILE_PATH="https://uni-wuppertal.sciebo.de/remote.php/webdav/openhd/X21/bigFiles.bz2"
 
 # Download the file
 echo "Downloading file from Sciebo..."
@@ -27,11 +27,7 @@ fi
 
 # Extract the tar.gz file while preserving permissions
 echo "Extracting the file..."
-tar -xvjf *.tar.bz2 --skip-old-files
+tar -xjvf bigFiles.tar.bz2 
 ls -a
 
-# Unpacking official SDK
-.repo/repo/repo sync -l
-
-cp -rfv overlay/* .
 ./build.sh kernel
