@@ -2369,7 +2369,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_det &sdmmc0_bus4>;
 		non-removable;
-		status = "enabled";
+		status = "okay";
 	};
 
 	sdio: dwmmc@ffc70000 {

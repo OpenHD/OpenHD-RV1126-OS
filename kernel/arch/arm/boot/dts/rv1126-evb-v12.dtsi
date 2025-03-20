@@ -14,7 +14,6 @@ aliases {
     mmc0 = &emmc;
 };
 
-
 	vdd_logic: vdd-logic {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_logic";
@@ -42,16 +41,6 @@ aliases {
 			};
 		};
 	};
-};
-
-
-&sdmmc {
-    bus-width = <4>;
-    status = "okay";
-};
-
-&emmc {
-	status = "okay";
 };
 
 &npu {
