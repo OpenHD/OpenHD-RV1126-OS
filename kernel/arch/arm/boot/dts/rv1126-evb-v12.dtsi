@@ -5,8 +5,15 @@
 
 #include "rv1126-evb-v10.dtsi"
 / {
+	
 	/delete-node/ vdd-npu;
 	/delete-node/ vdd-vepu;
+
+	aliases {
+		mmc0 = &emmc;
+		mmc1 = &sdmmc;
+	};
+
 
 	vdd_logic: vdd-logic {
 		compatible = "regulator-fixed";
@@ -17,6 +24,7 @@
 		regulator-max-microvolt = <810000>;
 	};
 };
+
 
 &rk809 {
 	regulators {
