@@ -1,0 +1,40 @@
+#
+
+menu "Others configurations"
+
+config RK_UBI_PAGE_SIZE
+	hex "ubi image page size (B)"
+	default "0x800"
+
+config RK_UBI_BLOCK_SIZE
+	hex "ubi image block size (B)"
+	default "0x20000"
+
+config RK_WIFIBT_CHIP
+	string "wifi/BT chip"
+	default "ALL_AP"
+	help
+	  ALL_AP for Realtek and AP6XXX, ALL_CY for Realtek and CYWXXX.
+	  Set "" for no WIFI/BT.
+
+config RK_WIFIBT_TTY
+	string "BT serial port"
+	depends on RK_WIFIBT_CHIP != ""
+	default "ttyS0"
+
+choice
+	prompt "Patches saving"
+	default RK_SAVE_TRACKED
+
+config RK_SAVE_COMMITTED
+	bool "Save committed changes only"
+
+config RK_SAVE_TRACKED
+	bool "Save changes of tracked files"
+
+config RK_SAVE_ALL
+	bool "Save all changes"
+
+endchoice
+
+endmenu # Others

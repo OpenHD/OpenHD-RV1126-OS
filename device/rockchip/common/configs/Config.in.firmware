@@ -1,0 +1,26 @@
+#
+
+menu "Firmware"
+
+config RK_PACKAGE_FILE
+	string "package-file"
+	help
+	  Name of custom package-file under <CHIP_DIR>/.
+	  Set "" to use default version.
+
+config RK_PARAMETER
+	string "parameter"
+	default "parameter-ab.txt" if RK_AB_UPDATE
+	default "parameter.txt"
+	help
+	  Name of parameter file under <CHIP_DIR>/.
+
+config RK_MISC_IMG
+	string "misc image"
+	default "blank-misc.img" if RK_AB_UPDATE
+	default "wipe_all-misc.img"
+	help
+	  Name of misc image under <RK_IMAGE_DIR>/.
+	  Set "" for no misc.
+
+endmenu # Firmware

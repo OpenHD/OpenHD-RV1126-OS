@@ -1,0 +1,18 @@
+#
+
+menu "Update (OTA and A/B)"
+
+config RK_OTA_PACKAGE_FILE
+	string "package-file for OTA"
+	help
+	  Name of custom package-file for OTA under <CHIP_DIR>/.
+	  Set "" to use default version.
+
+config RK_AB_UPDATE
+	bool "A/B update"
+
+config RK_AB_UPDATE_SDCARD
+	bool "SDcard update image for A/B update"
+	depends on RK_AB_UPDATE
+
+endmenu # Update

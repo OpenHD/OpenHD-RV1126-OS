@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# Make sure that we are sourced and called inside of RK build scripts.
+if [ "$BASH_SOURCE" = "$0" -o -z "$RK_BUILDING" ];then
+	echo "$(realpath $0) is not supposed to be executed directly"
+	exit 1
+fi
+
+rk_partition_num()
+{
+	echo ${RK_EXTRA_PARTITION_NUM:-0}
+}
+
+rk_partition_cfg()
+{
+	[ "$RK_EXTRA_PARTITION_STR" ] || return 0
+
+	RK_EXTRA_PARTITION_ARRAY=( $(echo ${RK_EXTRA_PARTITION_STR//@/ } | \
+		xargs -n 1 | sort) )
+	PART_IDX=$(( ${1:-1} - 1 ))
+	echo "${RK_EXTRA_PARTITION_ARRAY[$PART_IDX]}"
+}
+
+rk_partition_arg()
+{
+	PART="$(rk_partition_cfg ${1:-1})"
+	ARG="$(echo "$PART" | cut -d':' -f${2:-1})"
+	echo "${ARG:-$3}"
+}
+
+rk_partition_dev()
+{
+	rk_partition_arg ${1:-1} 1
+}
+
+rk_partition_name()
+{
+	rk_partition_arg ${1:-1} 2
+}
+
+rk_partition_mountpoint()
+{
+	rk_partition_arg ${1:-1} 3 "/$(rk_partition_name $1)"
+}
+
+rk_partition_fstype()
+{
+	rk_partition_arg ${1:-1} 4 ext4
+}
+
+rk_partition_options()
+{
+	rk_partition_arg ${1:-1} 5 defaults
+}
+
+rk_partition_src()
+{
+	PART_NAME="$(rk_partition_name $1)"
+	for s in $(rk_partition_arg ${1:-1} 6 | tr ',' ' '); do
+		echo "${PART_NAME}_${s}"
+	done
+}
+
+rk_partition_size()
+{
+	rk_partition_arg ${1:-1} 7 auto
+}
+
+rk_partition_fixed()
+{
+	rk_partition_arg ${1:-1} 8 | grep -wq fixed
+}
+
+rk_partition_builtin()
+{
+	rk_partition_arg ${1:-1} 8 | grep -wq builtin
+}
+
+rk_partition_outdir()
+{
+	echo "$RK_OUTDIR/$(rk_partition_name $1)"
+}
+
+rk_partition_fakeroot_script()
+{
+	echo "$(rk_partition_outdir $1).fs"
+}
+
+rk_partition_img()
+{
+	echo "$RK_FIRMWARE_DIR/$(rk_partition_name $1).img"
+}
+
+rk_partition_prepare()
+{
+	PART_NAME="$(rk_partition_name $1)"
+	OUTDIR="$(rk_partition_outdir $1)"
+	FAKEROOT_SCRIPT="$(rk_partition_fakeroot_script $1)"
+	SRCS="$(rk_partition_src $1)"
+	shift
+	EXTRA_SRCS="$@"
+
+	echo "Preparing partiton $PART_NAME"
+
+	rm -rf "$OUTDIR" "$FAKEROOT_SCRIPT"
+
+	if [ -z "$SRCS" ]; then
+		echo "Ignoring $PART_NAME for no sources"
+		return 0
+	fi
+
+	mkdir -p "$OUTDIR"
+
+	if rk_partition_fixed $idx; then
+		if ! rk_partition_builtin $idx; then
+			# Skip boot-time resizing by adding a tag file
+			touch "$OUTDIR/.fixed"
+		fi
+	fi
+
+	echo "#!/bin/sh -e" > "$FAKEROOT_SCRIPT"
+	chmod a+x "$FAKEROOT_SCRIPT"
+
+	for src in $SRCS $EXTRA_SRCS; do
+		# Src is either relative path to $RK_IMAGE_DIR/<name>/, or \
+		# absolute path.
+		if echo "$src" | grep -vq "^/"; then
+			src="$RK_IMAGE_DIR/$PART_NAME/$src"
+		fi
+
+		echo "Merging $src into $OUTDIR"
+		rsync -a "$src/" "$OUTDIR"
+		for f in $(ls "$OUTDIR" | grep "\.fs$" || true); do
+			echo "Merging $src/$f into $FAKEROOT_SCRIPT"
+			cat "$OUTDIR/$f" >> "$FAKEROOT_SCRIPT"
+			rm -f "$OUTDIR/$f"
+		done
+	done
+}

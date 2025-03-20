@@ -1,0 +1,7 @@
+RK_KERNEL_DTS_NAME="rv1126-evb-ddr3-v13"
+RK_UBOOT_OPTS="--spl-new"
+RK_USE_FIT_IMG=y
+RK_UBOOT_CFG="rv1126-ab"
+RK_AB_UPDATE=y
+RK_PARAMETER="parameter-ab-fit.txt"
+RK_EXTRA_PARTITION_1_SRC="ipc"

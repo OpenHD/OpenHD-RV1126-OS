@@ -1,0 +1,6 @@
+RK_ROOTFS_TYPE="squashfs"
+RK_KERNEL_DTS_NAME="rv1126-38x38-v10-emmc"
+RK_UBOOT_OPTS="--spl-new"
+RK_USE_FIT_IMG=y
+RK_PARAMETER="parameter-buildroot-fit.txt"
+RK_EXTRA_PARTITION_1_SRC="ipc"

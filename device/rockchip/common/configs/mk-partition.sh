@@ -1,0 +1,1 @@
+../scripts/mk-partition.sh
