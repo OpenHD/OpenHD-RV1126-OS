@@ -10,8 +10,8 @@
 	/delete-node/ vdd-vepu;
 
 aliases {
-    mmc0 = &emmc;
-    mmc1 = &sdmmc;
+    mmc1 = &emmc;
+    mmc2 = &sdmmc;
 };
 
 
