@@ -1,0 +1,125 @@
+From d9025b2cfac85222cc4cf7873b1acb69bd43677f Mon Sep 17 00:00:00 2001
+From: "jkand.huang" <jkand.huang@rock-chips.com>
+Date: Wed, 29 Apr 2020 16:10:27 +0800
+Subject: [PATCH 4/7] live555: change time from gettimeofday to clock_gettime.
+
+Signed-off-by: jkand.huang <jkand.huang@rock-chips.com>
+---
+ groupsock/GroupsockHelper.cpp | 85 +++--------------------------------
+ groupsock/include/NetCommon.h |  2 +-
+ 2 files changed, 6 insertions(+), 81 deletions(-)
+
+diff --git a/groupsock/GroupsockHelper.cpp b/groupsock/GroupsockHelper.cpp
+index 5378e7a..c61962a 100644
+--- a/groupsock/GroupsockHelper.cpp
++++ b/groupsock/GroupsockHelper.cpp
+@@ -1017,88 +1017,13 @@ char const* timestampString() {
+   return (char const*)&timeString;
+ }
+ 
+-#if (defined(__WIN32__) || defined(_WIN32)) && !defined(__MINGW32__)
+-// For Windoze, we need to implement our own gettimeofday()
+-
+-// used to make sure that static variables in gettimeofday() aren't initialized simultaneously by multiple threads
+-static LONG initializeLock_gettimeofday = 0;  
+-
+-#if !defined(_WIN32_WCE)
+-#include <sys/timeb.h>
+-#endif
+-
+ int gettimeofday(struct timeval* tp, int* /*tz*/) {
+-  static LARGE_INTEGER tickFrequency, epochOffset;
+-
+-  static Boolean isInitialized = False;
+-
+-  LARGE_INTEGER tickNow;
+-
+-#if !defined(_WIN32_WCE)
+-  QueryPerformanceCounter(&tickNow);
+-#else
+-  tickNow.QuadPart = GetTickCount();
+-#endif
+- 
+-  if (!isInitialized) {
+-    if(1 == InterlockedIncrement(&initializeLock_gettimeofday)) {
+-#if !defined(_WIN32_WCE)
+-      // For our first call, use "ftime()", so that we get a time with a proper epoch.
+-      // For subsequent calls, use "QueryPerformanceCount()", because it's more fine-grain.
+-      struct timeb tb;
+-      ftime(&tb);
+-      tp->tv_sec = tb.time;
+-      tp->tv_usec = 1000*tb.millitm;
+-
+-      // Also get our counter frequency:
+-      QueryPerformanceFrequency(&tickFrequency);
+-#else
+-      /* FILETIME of Jan 1 1970 00:00:00. */
+-      const LONGLONG epoch = 116444736000000000LL;
+-      FILETIME fileTime;
+-      LARGE_INTEGER time;
+-      GetSystemTimeAsFileTime(&fileTime);
+-
+-      time.HighPart = fileTime.dwHighDateTime;
+-      time.LowPart = fileTime.dwLowDateTime;
+-
+-      // convert to from 100ns time to unix timestamp in seconds, 1000*1000*10
+-      tp->tv_sec = (long)((time.QuadPart - epoch) / 10000000L);
+-
+-      /*
+-        GetSystemTimeAsFileTime has just a seconds resolution,
+-        thats why wince-version of gettimeofday is not 100% accurate, usec accuracy would be calculated like this:
+-        // convert 100 nanoseconds to usec
+-        tp->tv_usec= (long)((time.QuadPart - epoch)%10000000L) / 10L;
+-      */
+-      tp->tv_usec = 0;
+-
+-      // resolution of GetTickCounter() is always milliseconds
+-      tickFrequency.QuadPart = 1000;
+-#endif     
+-      // compute an offset to add to subsequent counter times, so we get a proper epoch:
+-      epochOffset.QuadPart
+-          = tp->tv_sec * tickFrequency.QuadPart + (tp->tv_usec * tickFrequency.QuadPart) / 1000000L - tickNow.QuadPart;
+-      
+-      // next caller can use ticks for time calculation
+-      isInitialized = True; 
+-      return 0;
+-    } else {
+-        InterlockedDecrement(&initializeLock_gettimeofday);
+-        // wait until first caller has initialized static values
+-        while(!isInitialized){
+-          Sleep(1);
+-        }
+-    }
+-  }
+-
+-  // adjust our tick count so that we get a proper epoch:
+-  tickNow.QuadPart += epochOffset.QuadPart;
+-
+-  tp->tv_sec =  (long)(tickNow.QuadPart / tickFrequency.QuadPart);
+-  tp->tv_usec = (long)(((tickNow.QuadPart % tickFrequency.QuadPart) * 1000000L) / tickFrequency.QuadPart);
++  struct timespec timeNow = {0, 0};
++  clock_gettime(CLOCK_MONOTONIC, &timeNow);
++  tp->tv_sec = timeNow.tv_sec;
++  tp->tv_usec = timeNow.tv_nsec/1000;
+ 
+   return 0;
+ }
+-#endif
++
+ #undef ANDROID_OLD_NDK
+diff --git a/groupsock/include/NetCommon.h b/groupsock/include/NetCommon.h
+index 87e3d2f..015786f 100644
+--- a/groupsock/include/NetCommon.h
++++ b/groupsock/include/NetCommon.h
+@@ -93,7 +93,7 @@ typedef unsigned char u_int8_t;
+ /* Unix */
+ #include <sys/types.h>
+ #include <sys/socket.h>
+-#include <sys/time.h>
++//#include <sys/time.h>
+ #include <netinet/in.h>
+ #include <arpa/inet.h>
+ #include <netdb.h>
+-- 
+2.20.1
+

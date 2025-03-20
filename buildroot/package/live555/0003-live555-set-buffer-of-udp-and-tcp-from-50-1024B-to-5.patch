@@ -1,0 +1,42 @@
+From f0abb95715b74d6456a227cf2e457f46a9bf5327 Mon Sep 17 00:00:00 2001
+From: "jkand.huang" <jkand.huang@rock-chips.com>
+Date: Tue, 28 Apr 2020 17:36:50 +0800
+Subject: [PATCH 3/7] live555: set buffer of udp and tcp from 50*1024B to
+ 512*1024B.
+
+Signed-off-by: jkand.huang <jkand.huang@rock-chips.com>
+---
+ liveMedia/GenericMediaServer.cpp | 3 ++-
+ liveMedia/RTPInterface.cpp       | 2 +-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/liveMedia/GenericMediaServer.cpp b/liveMedia/GenericMediaServer.cpp
+index da8a66a..d72f79a 100644
+--- a/liveMedia/GenericMediaServer.cpp
++++ b/liveMedia/GenericMediaServer.cpp
+@@ -239,7 +239,8 @@ void GenericMediaServer::incomingConnectionHandlerOnSocket(int serverSocket) {
+   }
+   ignoreSigPipeOnSocket(clientSocket); // so that clients on the same host that are killed don't also kill us
+   makeSocketNonBlocking(clientSocket);
+-  increaseSendBufferTo(envir(), clientSocket, 50*1024);
++  // set tcp to 512k
++  increaseSendBufferTo(envir(), clientSocket, 512*1024);
+   
+ #ifdef DEBUG
+   envir() << "accept()ed connection from " << AddressString(clientAddr).val() << "\n";
+diff --git a/liveMedia/RTPInterface.cpp b/liveMedia/RTPInterface.cpp
+index fb0ab3a..3d6c421 100644
+--- a/liveMedia/RTPInterface.cpp
++++ b/liveMedia/RTPInterface.cpp
+@@ -137,7 +137,7 @@ RTPInterface::RTPInterface(Medium* owner, Groupsock* gs)
+   // even if the socket was previously reported (e.g., by "select()") as having data available.
+   // (This can supposedly happen if the UDP checksum fails, for example.)
+   makeSocketNonBlocking(fGS->socketNum());
+-  increaseSendBufferTo(envir(), fGS->socketNum(), 50*1024);
++  increaseSendBufferTo(envir(), fGS->socketNum(), 512*1024);
+ }
+ 
+ RTPInterface::~RTPInterface() {
+-- 
+2.20.1
+

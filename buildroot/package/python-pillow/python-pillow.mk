@@ -1,0 +1,88 @@
+################################################################################
+#
+# python-pillow
+#
+################################################################################
+
+PYTHON_PILLOW_VERSION = 9.2.0
+PYTHON_PILLOW_SITE = https://files.pythonhosted.org/packages/8c/92/2975b464d9926dc667020ed1abfa6276e68c3571dcb77e43347e15ee9eed
+PYTHON_PILLOW_SOURCE = Pillow-$(PYTHON_PILLOW_VERSION).tar.gz
+PYTHON_PILLOW_LICENSE = HPND
+PYTHON_PILLOW_LICENSE_FILES = LICENSE
+PYTHON_PILLOW_CPE_ID_VENDOR = python
+PYTHON_PILLOW_CPE_ID_PRODUCT = pillow
+PYTHON_PILLOW_SETUP_TYPE = setuptools
+
+PYTHON_PILLOW_DEPENDENCIES = host-pkgconf
+PYTHON_PILLOW_BUILD_OPTS = build_ext --disable-platform-guessing
+PYTHON_PILLOW_INSTALL_TARGET_OPTS = $(PYTHON_PILLOW_BUILD_OPTS)
+
+ifeq ($(BR2_PACKAGE_FREETYPE),y)
+PYTHON_PILLOW_DEPENDENCIES += freetype
+PYTHON_PILLOW_BUILD_OPTS += --enable-freetype
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-freetype
+endif
+
+ifeq ($(BR2_PACKAGE_JPEG),y)
+PYTHON_PILLOW_DEPENDENCIES += jpeg
+PYTHON_PILLOW_BUILD_OPTS += --enable-jpeg
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-jpeg
+endif
+
+ifeq ($(BR2_PACKAGE_LCMS2),y)
+PYTHON_PILLOW_DEPENDENCIES += lcms2
+PYTHON_PILLOW_BUILD_OPTS += --enable-lcms
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-lcms
+endif
+
+ifeq ($(BR2_PACKAGE_LIBXCB),y)
+PYTHON_PILLOW_DEPENDENCIES += libxcb
+PYTHON_PILLOW_BUILD_OPTS += --enable-xcb
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-xcb
+endif
+
+ifeq ($(BR2_PACKAGE_OPENJPEG),y)
+PYTHON_PILLOW_DEPENDENCIES += openjpeg
+PYTHON_PILLOW_BUILD_OPTS += --enable-jpeg2000
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-jpeg2000
+endif
+
+ifeq ($(BR2_PACKAGE_TIFF),y)
+PYTHON_PILLOW_DEPENDENCIES += tiff
+PYTHON_PILLOW_BUILD_OPTS += --enable-tiff
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-tiff
+endif
+
+ifeq ($(BR2_PACKAGE_WEBP),y)
+PYTHON_PILLOW_DEPENDENCIES += webp
+PYTHON_PILLOW_BUILD_OPTS += --enable-webp
+ifeq ($(BR2_PACKAGE_WEBP_DEMUX)$(BR2_PACKAGE_WEBP_MUX),yy)
+PYTHON_PILLOW_BUILD_OPTS += --enable-webpmux
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-webpmux
+endif
+else
+PYTHON_PILLOW_BUILD_OPTS += --disable-webp --disable-webpmux
+endif
+
+HOST_PYTHON_PILLOW_DEPENDENCIES = host-pkgconf
+HOST_PYTHON_PILLOW_BUILD_OPTS = \
+	build_ext \
+	--disable-freetype \
+	--disable-jpeg \
+	--disable-lcms \
+	--disable-xcb \
+	--disable-jpeg2000 \
+	--disable-tiff \
+	--disable-webp \
+	--disable-webpmux
+HOST_PYTHON_PILLOW_INSTALL_OPTS = $(HOST_PYTHON_PILLOW_BUILD_OPTS)
+
+$(eval $(python-package))
+$(eval $(host-python-package))
