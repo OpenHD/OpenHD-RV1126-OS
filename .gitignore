@@ -62,3 +62,15 @@ external/rockit/mpi/example/res/vplay/test_1080p.ts
 output/
 overlay/
 .repo/
+output/final.env
+output/initial.env
+output/log/2025-03-20_17-22-07/10-kernel-pre-build.log
+output/log/2025-03-20_17-22-07/10-kernel-pre-build_2025-03-20_17-22-10.log
+output/log/2025-03-20_17-22-07/build.log
+output/log/2025-03-20_17-22-07/build_2025-03-20_17-22-10.log
+output/log/2025-03-20_17-22-07/post-build.log
+output/log/2025-03-20_17-22-07/post-build_2025-03-20_17-22-10.log
+output/log/2025-03-20_17-22-07/pre-build.log
+output/log/2025-03-20_17-22-07/pre-build_2025-03-20_17-22-10.log
+output/log/latest
+u-boot/tee.bin.gz
