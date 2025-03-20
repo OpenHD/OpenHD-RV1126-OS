@@ -5,7 +5,11 @@
 
 #include "rv1126-evb-v10.dtsi"
 / {
-	
+	aliases {
+		mmc0 = &emmc;
+		mmc1 = &sdmmc;
+	};
+
 	/delete-node/ vdd-npu;
 	/delete-node/ vdd-vepu;
 
@@ -19,6 +23,9 @@
 	};
 };
 
+&sdmmc {
+	status = "okay";
+};
 
 &rk809 {
 	regulators {
@@ -36,18 +43,6 @@
 			};
 		};
 	};
-};
-
-&mmc1 {
-	broken-cd;
-	bus-width = <4>;
-	status = "okay";
-};
-
-&mmc0 {
-	broken-cd;
-	bus-width = <4>;
-	status = "okay";
 };
 
 &npu {
