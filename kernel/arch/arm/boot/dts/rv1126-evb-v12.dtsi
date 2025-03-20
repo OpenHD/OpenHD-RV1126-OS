@@ -45,6 +45,35 @@ aliases {
 };
 
 &sdmmc0 {
+	status = "okey";
+};
+
+&sdmmc0_bus4 {
+	rockchip,pins =
+		/* sdmmc0_d0 */
+		<1 RK_PA4 1 &pcfg_pull_up_drv_level_0>,
+		/* sdmmc0_d1 */
+		<1 RK_PA5 1 &pcfg_pull_up_drv_level_0>,
+		/* sdmmc0_d2 */
+		<1 RK_PA6 1 &pcfg_pull_up_drv_level_0>,
+		/* sdmmc0_d3 */
+		<1 RK_PA7 1 &pcfg_pull_up_drv_level_0>;
+};
+
+&sdmmc0_clk {
+	rockchip,pins =
+		/* sdmmc0_clk */
+		<1 RK_PB0 1 &pcfg_pull_up_drv_level_3>;
+};
+
+&sdmmc0_cmd {
+	rockchip,pins =
+		/* sdmmc0_cmd */
+		<1 RK_PB1 1 &pcfg_pull_up_drv_level_0>;
+};
+
+
+&sdmmc {
     broken-cd;
     bus-width = <4>;
     cap-mmc-highspeed;
@@ -58,18 +87,8 @@ aliases {
     status = "okay";
 };
 
-&sdmmc1 {
-    broken-cd;
-    bus-width = <4>;
-    cap-mmc-highspeed;
-    cap-sd-highspeed;
-    card-detect-delay = <200>;
-    rockchip,default-sample-phase = <90>;
-    supports-sd;
-    sd-uhs-sdr12;
-    sd-uhs-sdr25;
-    sd-uhs-sdr104;
-    status = "okay";
+&emmc {
+	status = "okey";
 };
 
 &npu {
