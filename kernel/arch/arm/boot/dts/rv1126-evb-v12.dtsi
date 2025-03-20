@@ -37,22 +37,6 @@
 		status = "disabled";
 };
 
-&imx335 {
-		status = "disabled";
-};
-
-&imx415 {
-		status = "disabled";
-};
-
-&ov4689 {
-		status = "disabled";
-};
-
-&os04a10 {
-		status = "disabled";
-};
-
 &npu {
 	npu-supply = <&vdd_npu_vepu>;
 };
