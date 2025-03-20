@@ -2364,7 +2364,7 @@
 		max-frequency = <200000000>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_det &sdmmc0_bus4>;
-		status = "enabled";
+		status = "disabled";
 	};
 
 	sdio: dwmmc@ffc70000 {
