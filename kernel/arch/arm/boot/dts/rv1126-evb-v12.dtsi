@@ -9,10 +9,10 @@
 	/delete-node/ vdd-npu;
 	/delete-node/ vdd-vepu;
 
-	aliases {
-		mmc1 = &emmc;
-		mmc0 = &sdmmc;
-	};
+aliases {
+    mmc0 = &sdmmc0;
+    mmc1 = &sdmmc1;
+};
 
 
 	vdd_logic: vdd-logic {
@@ -44,19 +44,32 @@
 	};
 };
 
-&sdmmc {
-	broken-cd;
-	bus-width = <4>;
-	cap-mmc-highspeed;
-	cap-sd-highspeed;
-	card-detect-delay = <200>;
-	rockchip,default-sample-phase = <90>;
-	supports-sd;
-	sd-uhs-sdr12;
-	sd-uhs-sdr25;
-	sd-uhs-sdr104;
-	vqmmc-supply = <&vccio_sd>;
-	status = "okay";
+&sdmmc0 {
+    broken-cd;
+    bus-width = <4>;
+    cap-mmc-highspeed;
+    cap-sd-highspeed;
+    card-detect-delay = <200>;
+    rockchip,default-sample-phase = <90>;
+    supports-sd;
+    sd-uhs-sdr12;
+    sd-uhs-sdr25;
+    sd-uhs-sdr104;
+    status = "okay";
+};
+
+&sdmmc1 {
+    broken-cd;
+    bus-width = <4>;
+    cap-mmc-highspeed;
+    cap-sd-highspeed;
+    card-detect-delay = <200>;
+    rockchip,default-sample-phase = <90>;
+    supports-sd;
+    sd-uhs-sdr12;
+    sd-uhs-sdr25;
+    sd-uhs-sdr104;
+    status = "okay";
 };
 
 &npu {
