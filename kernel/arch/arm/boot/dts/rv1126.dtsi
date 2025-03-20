@@ -2369,6 +2369,9 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdmmc0_clk &sdmmc0_cmd &sdmmc0_det &sdmmc0_bus4>;
 		non-removable;
+		cap-mmc-highspeed;
+    	cap-sd-highspeed;
+    	broken-cd;
 		status = "okay";
 	};
 
@@ -2384,7 +2387,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&sdio_clk &sdio_cmd &sdio_bus4>;
 		power-domains = <&power RV1126_PD_SDIO>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	nandc: nandc@ffc80000 {
