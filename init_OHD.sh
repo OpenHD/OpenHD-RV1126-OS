@@ -29,5 +29,3 @@ fi
 echo "Extracting the file..."
 tar -xjvf bigFiles.tar.bz2 
 ls -a
-
-./build.sh kernel
