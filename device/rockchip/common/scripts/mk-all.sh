@@ -66,16 +66,16 @@ build_save()
 	mkdir -p "$SAVE_DIR/IMAGES/"
 	cp "$RK_FIRMWARE_DIR"/* "$SAVE_DIR/IMAGES/"
 
-	echo "Saving patches..."
-	mkdir -p "$SAVE_DIR/PATCHES"
-	.repo/repo/repo forall -j $(( $CPUS + 1 )) -c \
-		"\"$SCRIPTS_DIR/save-patches.sh\" \
-		\"$SAVE_DIR/PATCHES/\$REPO_PATH\" \$REPO_PATH \$REPO_LREV"
-	install -D -m 0755 "$COMMON_DIR/data/apply-all.sh" "$SAVE_DIR/PATCHES/"
+	#echo "Saving patches..."
+	#mkdir -p "$SAVE_DIR/PATCHES"
+	#.repo/repo/repo forall -j $(( $CPUS + 1 )) -c \
+	#	"\"$SCRIPTS_DIR/save-patches.sh\" \
+	#	\"$SAVE_DIR/PATCHES/\$REPO_PATH\" \$REPO_PATH \$REPO_LREV"
+	#install -D -m 0755 "$COMMON_DIR/data/apply-all.sh" "$SAVE_DIR/PATCHES/"
 
-	echo "Saving build info..."
-	yes | ${PYTHON3:-python3} .repo/repo/repo manifest -r \
-		-o "$SAVE_DIR/manifest.xml"
+	#echo "Saving build info..."
+	#yes | ${PYTHON3:-python3} .repo/repo/repo manifest -r \
+	#	-o "$SAVE_DIR/manifest.xml"
 
 	cp "$RK_FINAL_ENV" "$RK_CONFIG" "$RK_DEFCONFIG" "$SAVE_DIR/"
 	ln -rsf "$RK_CONFIG" "$SAVE_DIR/build_info"
