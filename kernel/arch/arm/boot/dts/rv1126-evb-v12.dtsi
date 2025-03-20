@@ -84,7 +84,7 @@ aliases {
 };
 
 &emmc {
-	status = "okey";
+	status = "okay";
 };
 
 &npu {
