@@ -9,11 +9,6 @@
 	/delete-node/ vdd-npu;
 	/delete-node/ vdd-vepu;
 
-aliases {
-    mmc1 = &sdmmc;
-    mmc0 = &emmc;
-};
-
 	vdd_logic: vdd-logic {
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_logic";
@@ -41,6 +36,18 @@ aliases {
 			};
 		};
 	};
+};
+
+&mmc1 {
+	broken-cd;
+	bus-width = <4>;
+	status = "okay";
+};
+
+&mmc0 {
+	broken-cd;
+	bus-width = <4>;
+	status = "okay";
 };
 
 &npu {
