@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<opencv_storage>
+
+  <camera_type>0</camera_type>
+  <camera_rate>30</camera_rate>
+  <camera_rs_time>0.01</camera_rs_time>
+  <width>1296</width>
+  <height>968</height>
+  <camera_matrix type_id="opencv-matrix">
+    <rows>3</rows>
+    <cols>3</cols>
+    <dt>f</dt>
+    <data>
+      821.634811495 0. 628.013966215 0. 821.702833665
+      456.82825842 0. 0. 1.
+    </data>
+  </camera_matrix>
+  <camera_distortion type_id="opencv-matrix">
+    <rows>1</rows>
+    <cols>5</cols>
+    <dt>f</dt>
+    <data>
+      -0.34710131 0.11879185 -0.00007207 0.00012455 -0.01960581
+    </data>
+  </camera_distortion>
+  <camera_transform type_id="opencv-matrix">
+    <rows>4</rows>
+    <cols>4</cols>
+    <dt>f</dt>
+    <data>
+      1.0 0. 0. 0.
+      0. -1.0 0. 0.
+      0. 0 -1.0 0.0
+      0. 0. 0. 1.0
+    </data>
+  </camera_transform>
+  <camera_Xi>0.737307</camera_Xi>
+  <camera_lgamma>0.892382720372420</camera_lgamma>
+  <camera_wc1>0.000385546238648771</camera_wc1>
+  <camera_wc2>-0.00340777046300946</camera_wc2>
+  
+  <imu_rate>1000</imu_rate>
+  <gbias_x>0.0</gbias_x>
+  <gbias_y>0.0</gbias_y>
+  <gbias_z>0.0</gbias_z>
+  <abias_x>0.0</abias_x>
+  <abias_y>0.0</abias_y>
+  <abias_z>0.0</abias_z>
+  <time_offset> -0.060</time_offset>
+  <imu_transform type_id="opencv-matrix">
+    <rows>4</rows>
+    <cols>4</cols>
+    <dt>f</dt>
+    <data>
+      1.0 0.0 0.0 0.0
+      0.0 1.0 0.0 0.0
+      0.0 0.0 1.0 0.0
+      0.0 0.0 0.0 1.0
+    </data>
+  </imu_transform>
+
+  <save_objpts_path>"../data/camera202103091746.mp4"</save_objpts_path>
+</opencv_storage>

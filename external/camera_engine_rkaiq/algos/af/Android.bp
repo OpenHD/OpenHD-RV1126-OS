@@ -1,0 +1,51 @@
+cc_library_static {
+	name: "librkaiq_af",
+	vendor: true,
+
+	include_dirs: [
+		"hardware/rockchip/rk_aiq/algos",
+		"hardware/rockchip/rk_aiq/xcore",
+		"hardware/rockchip/rk_aiq/xcore/base",
+		"hardware/rockchip/rk_aiq/include/algos",
+		"hardware/rockchip/rk_aiq/include",
+		"hardware/rockchip/rk_aiq/include/xcore",
+		"hardware/rockchip/rk_aiq/include/xcore/base",
+		"hardware/rockchip/rk_aiq/include/algos/af",
+		"hardware/rockchip/rk_aiq/include/iq_parser",
+		"hardware/rockchip/rk_aiq/include/common",
+        "hardware/rockchip/rk_aiq/common",
+	],
+
+	srcs: [
+        "rk_aiq_algo_af_itf.cpp",
+        "af.cpp",
+        "af_search.cpp",
+		"af_trigger.cpp",
+        "af_utils.cpp",
+        "rk_aiq_uapi_af_int.cpp",
+	],
+	
+	cppflags: [
+        "-ffast-math",
+		"-funroll-loops",
+		"-Os",
+		"-g",
+		"-Wno-error",
+        "-Wno-unused-value",                                                                                                                  
+        "-Wno-unused-variable",
+        "-Wno-unused-private-field",
+        "-Wno-unused-but-set-variable",
+        "-Wno-unused-function",
+        "-Wno-implicit-fallthrough",
+        "-Wno-address-of-packed-member",
+        "-Wno-ignored-qualifiers",
+        "-Wno-unused-label",
+        "-fno-strict-aliasing",
+        "-Wno-reorder",
+        "-Wno-overloaded-virtual",
+        "-Wno-unused-parameter",
+        "-Wno-extern-c-compat",
+		"-Wno-missing-braces",
+		"-Wno-missing-field-initializers"
+	],
+}

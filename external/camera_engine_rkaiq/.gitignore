@@ -1,0 +1,10 @@
+*.patch
+*CMakeCache.txt
+*CMakeFiles
+Makefile
+algos/Makefile
+*cmake_install.cmake
+all_lib/
+*install_manifest.txt
+rkisp_api/all_lib/
+rkisp_api/cmake_install.cmake
