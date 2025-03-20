@@ -10,8 +10,8 @@
 	/delete-node/ vdd-vepu;
 
 aliases {
-    mmc0 = &sdmmc0;
-    mmc1 = &sdmmc1;
+    mmc0 = &emmc;
+    mmc1 = &sdmmc;
 };
 
 
@@ -42,10 +42,6 @@ aliases {
 			};
 		};
 	};
-};
-
-&sdmmc0 {
-	status = "okey";
 };
 
 &sdmmc0_bus4 {
