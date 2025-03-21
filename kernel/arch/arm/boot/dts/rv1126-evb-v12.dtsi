@@ -5,11 +5,6 @@
 
 #include "rv1126-evb-v10.dtsi"
 / {
-	aliases {
-		mmc0 = &emmc;
-		mmc1 = &sdmmc;
-	};
-
 	/delete-node/ vdd-npu;
 	/delete-node/ vdd-vepu;
 
@@ -21,10 +16,6 @@
 		regulator-min-microvolt = <810000>;
 		regulator-max-microvolt = <810000>;
 	};
-};
-
-&sdmmc {
-	status = "okay";
 };
 
 &rk809 {
@@ -43,6 +34,22 @@
 			};
 		};
 	};
+};
+
+&imx335 {
+        reset-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+};
+
+&imx415 {
+        reset-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+};
+
+&ov4689 {
+	reset-gpios = <&gpio2 RK_PA0 GPIO_ACTIVE_LOW>;
+};
+
+&os04a10 {
+	reset-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
 };
 
 &npu {
