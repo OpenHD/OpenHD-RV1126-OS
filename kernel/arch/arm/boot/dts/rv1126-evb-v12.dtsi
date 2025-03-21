@@ -5,11 +5,6 @@
 
 #include "rv1126-evb-v10.dtsi"
 / {
-	aliases {
-		mmc0 = &emmc;
-		mmc1 = &sdmmc;
-	};
-
 	/delete-node/ vdd-npu;
 	/delete-node/ vdd-vepu;
 
@@ -21,10 +16,6 @@
 		regulator-min-microvolt = <810000>;
 		regulator-max-microvolt = <810000>;
 	};
-};
-
-&sdmmc {
-	status = "okay";
 };
 
 &rk809 {
