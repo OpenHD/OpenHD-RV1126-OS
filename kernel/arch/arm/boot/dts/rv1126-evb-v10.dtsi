@@ -28,81 +28,6 @@
 	status = "okay";
 };
 
-&csi_dphy0 {
-	status = "okay";
-
-	ports {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		port@0 {
-			reg = <0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			mipi_in_ucam0: endpoint@1 {
-				reg = <1>;
-				remote-endpoint = <&ucam_out0>;
-				data-lanes = <1 2 3 4>;
-			};
-
-			mipi_in_ucam2: endpoint@2 {
-				reg = <2>;
-				remote-endpoint = <&ucam_out2>;
-				data-lanes = <1 2 3 4>;
-			};
-
-			mipi_in_ucam3: endpoint@3 {
-				reg = <3>;
-				remote-endpoint = <&ucam_out3>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-		port@1 {
-			reg = <1>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			csidphy0_out: endpoint@0 {
-				reg = <0>;
-				remote-endpoint = <&mipi_csi2_input>;
-			};
-		};
-	};
-};
-
-&csi_dphy1 {
-	status = "okay";
-
-	ports {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		port@0 {
-			reg = <0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			csi_dphy1_input: endpoint@1 {
-				reg = <1>;
-				remote-endpoint = <&ucam_out1>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-
-		port@1 {
-			reg = <1>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			csi_dphy1_output: endpoint@0 {
-				reg = <0>;
-				/*remote-endpoint = <&mipi_csi2_input>;*/
-				data-lanes = <1 2 3 4>;
-			};
-		};
-	};
-};
-
 &emmc {
 	bus-width = <4>;
 	cap-mmc-highspeed;
@@ -121,62 +46,6 @@
 &i2c0 {
 	status = "okay";
 	clock-frequency = <400000>;
-
-	};
-};
-
-&i2c1 {
-	status = "okay";
-	clock-frequency = <400000>;
-
-	imx415: imx415@1a {
-		compatible = "sony,imx415";
-		reg = <0x1a>;
-		clocks = <&cru CLK_MIPICSI_OUT>;
-		clock-names = "xvclk";
-		power-domains = <&power RV1126_PD_VI>;
-		pinctrl-names = "rockchip,camera_default";
-		pinctrl-0 = <&mipicsi_clk0>;
-		pwdn-gpios = <&gpio1 RK_PD4 GPIO_ACTIVE_HIGH>;
-		rockchip,camera-module-index = <1>;
-		rockchip,camera-module-facing = "front";
-		rockchip,camera-module-name = "YT10092";
-		rockchip,camera-module-lens-name = "IR0147-36IRC-8M-F20";
-		ir-cut = <&cam_ircut0>;
-		port {
-			ucam_out2: endpoint {
-				remote-endpoint = <&mipi_in_ucam2>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-	};
-
-
-	ov4689: ov4689@36 {
-		compatible = "ovti,ov4689";
-		reg = <0x36>;
-		clocks = <&cru CLK_MIPICSI_OUT>;
-		clock-names = "xvclk";
-		power-domains = <&power RV1126_PD_VI>;
-		pinctrl-names = "rockchip,camera_default";
-		pinctrl-0 = <&mipicsi_clk1>;
-		/*pinctrl-0 = <&mipicsi_clk0>;*/
-		pwdn-gpios = <&gpio2 RK_PA7 GPIO_ACTIVE_HIGH>;
-		/*pwdn-gpios = <&gpio1 RK_PD4 GPIO_ACTIVE_HIGH>;*/
-		rockchip,camera-module-index = <1>;
-		rockchip,camera-module-facing = "front";
-		rockchip,camera-module-name = "JSD3425-C1";
-		rockchip,camera-module-lens-name = "JSD3425-C1";
-		/* NO_HDR:0 HDR_X2:5 HDR_X3:6 */
-		rockchip,camera-hdr-mode = <0>;
-		port {
-			ucam_out1: endpoint {
-				remote-endpoint = <&csi_dphy1_input>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-
-	};
 };
 
 &i2c5 {
@@ -209,43 +78,6 @@
 };
 
 &iep_mmu {
-	status = "okay";
-};
-
-&mipi_csi2 {
-	status = "okay";
-
-	ports {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		port@0 {
-			reg = <0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			mipi_csi2_input: endpoint@1 {
-				reg = <1>;
-				remote-endpoint = <&csidphy0_out>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-
-		port@1 {
-			reg = <1>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			mipi_csi2_output: endpoint@0 {
-				reg = <0>;
-				remote-endpoint = <&cif_mipi_in>;
-				data-lanes = <1 2 3 4>;
-			};
-		};
-	};
-};
-
-&mipi_dphy {
 	status = "okay";
 };
 
@@ -296,31 +128,6 @@
 };
 
 &pinctrl {
-	pmic {
-		/omit-if-no-ref/
-		pmic_int: pmic_int {
-			rockchip,pins =
-				<0 RK_PB1 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-
-		/omit-if-no-ref/
-		soc_slppin_gpio: soc_slppin_gpio {
-			rockchip,pins =
-				<0 RK_PB2 RK_FUNC_GPIO &pcfg_output_low>;
-		};
-
-		/omit-if-no-ref/
-		soc_slppin_slp: soc_slppin_slp {
-			rockchip,pins =
-				<0 RK_PB2 RK_FUNC_1 &pcfg_pull_none>;
-		};
-
-		/omit-if-no-ref/
-		soc_slppin_rst: soc_slppin_rst {
-			rockchip,pins =
-				<0 RK_PB2 RK_FUNC_2 &pcfg_pull_none>;
-		};
-	};
 
 	sdio-pwrseq {
 		/omit-if-no-ref/
@@ -337,114 +144,11 @@
 	};
 };
 
-&pwm0 {
-	status = "okay";
-	pinctrl-names = "active";
-	pinctrl-0 = <&pwm0m0_pins_pull_down>;
-};
-
-&pwm1 {
-	status = "okay";
-	pinctrl-names = "active";
-	pinctrl-0 = <&pwm1m0_pins_pull_down>;
-};
-
-&pwm3 {
-	status = "okay";
-};
-
 &ramoops {
 	status = "okay";
 };
 
 &rk_rga {
-	status = "okay";
-};
-
-&rkcif {
-	status = "okay";
-};
-
-&rkcif_mmu {
-	status = "disabled";
-};
-
-&rkcif_dvp {
-	status = "okay";
-
-	port {
-		/* Parallel bus endpoint */
-		/*
-		cif_para_in: endpoint {
-			remote-endpoint = <&cam_para_out1>;
-			bus-width = <12>;
-			hsync-active = <1>;
-			vsync-active = <0>;
-		};
-		*/
-	};
-};
-
-&rkcif_mipi_lvds {
-	status = "okay";
-
-	port {
-		/* MIPI CSI-2 endpoint */
-		cif_mipi_in: endpoint {
-			remote-endpoint = <&mipi_csi2_output>;
-			data-lanes = <1 2 3 4>;
-		};
-	};
-};
-
-&rkcif_mipi_lvds_sditf {
-	status = "okay";
-
-	port {
-		/* MIPI CSI-2 endpoint */
-		mipi_lvds_sditf: endpoint {
-			remote-endpoint = <&isp_in>;
-			data-lanes = <1 2 3 4>;
-		};
-	};
-};
-
-&rkisp {
-	status = "okay";
-};
-
-&rkisp_vir0 {
-	status = "okay";
-
-	ports {
-		port@0 {
-			reg = <0>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			isp_in: endpoint@0 {
-				reg = <0>;
-				remote-endpoint = <&mipi_lvds_sditf>;
-			};
-		};
-	};
-};
-
-&rkisp_mmu {
-	status = "disabled";
-};
-
-&rkispp {
-	status = "okay";
-	/* the max input w h and fps of mulit sensor */
-	//max-input = <2688 1520 30>;
-};
-
-&rkispp_vir0 {
-	status = "okay";
-};
-
-&rkispp_mmu {
 	status = "okay";
 };
 
@@ -484,10 +188,6 @@
 		| RKPM_GPIO_WKUP_EN
 		)
 	>;
-};
-
-&route_dsi {
-	status = "okay";
 };
 
 &saradc {
