@@ -11,6 +11,8 @@ menu "Target packages"
 	source "package/skeleton-init-sysv/Config.in"
 
 menu "Audio and video applications"
+
+	source "package/openhd/Config.in"
 	source "package/alsa-utils/Config.in"
 	source "package/atest/Config.in"
 	source "package/aumix/Config.in"
