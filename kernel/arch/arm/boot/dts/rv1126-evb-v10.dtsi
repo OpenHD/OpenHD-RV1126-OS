@@ -855,7 +855,7 @@
 
 &i2c5 {
 	status = "okay";
-	clock-frequency = <400000>;
+	clock-frequency = <24000000>;
 
 	ar0230: ar0230@10 {
 		compatible = "aptina,ar0230";
