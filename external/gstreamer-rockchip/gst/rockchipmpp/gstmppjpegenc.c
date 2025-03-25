@@ -55,23 +55,25 @@ enum
   PROP_LAST,
 };
 
-#define GST_MPP_JPEG_ENC_SIZE_CAPS \
-    "width  = (int) [ 16, MAX ], height = (int) [ 16, MAX ]"
-
 static GstStaticPadTemplate gst_mpp_jpeg_enc_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("image/jpeg, "
-        GST_MPP_JPEG_ENC_SIZE_CAPS "," "sof-marker = { 0 }"));
+        "width  = (int) [ 16, 8192 ], "
+        "height = (int) [ 16, 8192 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ", " "sof-marker = { 0 }")
+    );
 
 static GstStaticPadTemplate gst_mpp_jpeg_enc_sink_template =
-GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw,"
         "format = (string) { " MPP_ENC_FORMATS " }, "
-        GST_MPP_JPEG_ENC_SIZE_CAPS));
+        "width  = (int) [ 16, 8192 ], "
+        "height = (int) [ 16, 8192 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ";"));
 
 static void
 gst_mpp_h264_enc_set_property (GObject * object,
@@ -203,14 +205,4 @@ gst_mpp_jpeg_enc_class_init (GstMppJpegEncClass * klass)
       "Encode video streams via Rockchip Mpp",
       "Randy Li <randy.li@rock-chips.com>, "
       "Jeffy Chen <jeffy.chen@rock-chips.com>");
-}
-
-gboolean
-gst_mpp_jpeg_enc_register (GstPlugin * plugin, guint rank)
-{
-  if (!gst_mpp_enc_supported (MPP_VIDEO_CodingMJPEG))
-    return FALSE;
-
-  return gst_element_register (plugin, "mppjpegenc", rank,
-      gst_mpp_jpeg_enc_get_type ());
 }

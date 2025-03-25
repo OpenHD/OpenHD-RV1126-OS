@@ -29,50 +29,21 @@
 #include <rga/RgaApi.h>
 #endif
 
+#include <gst/gst-compat-private.h>
 #include <rockchip/rk_mpi.h>
 
 G_BEGIN_DECLS;
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
-#endif
-
-#ifndef SWAP
-#define SWAP(x, y) ({ x ^= y; y ^= x; x ^= y; })
-#endif
-
 #define MPP_FMT_LE(f) (f | MPP_FRAME_FMT_LE_MASK)
 #define MPP_FMT_RGB565LE MPP_FMT_LE(MPP_FMT_RGB565)
 #define MPP_FMT_BGR565LE MPP_FMT_LE(MPP_FMT_BGR565)
+#define MPP_FMT_RGB555LE MPP_FMT_LE(MPP_FMT_RGB555)
+#define MPP_FMT_BGR555LE MPP_FMT_LE(MPP_FMT_BGR555)
 
 #define GST_MPP_VIDEO_INFO_HSTRIDE(i) GST_VIDEO_INFO_PLANE_STRIDE(i, 0)
 #define GST_MPP_VIDEO_INFO_VSTRIDE(i) \
     (GST_VIDEO_INFO_N_PLANES(i) == 1 ? GST_VIDEO_INFO_HEIGHT(i) : \
     (gint) (GST_VIDEO_INFO_PLANE_OFFSET(i, 1) / GST_MPP_VIDEO_INFO_HSTRIDE(i)))
-
-#ifndef GST_VIDEO_FLAG_ARM_AFBC
-#define GST_VIDEO_FLAG_ARM_AFBC (1UL << 31)
-#define GST_VIDEO_INFO_SET_AFBC(i) \
-  GST_VIDEO_INFO_FLAG_SET (i, GST_VIDEO_FLAG_ARM_AFBC)
-#define GST_VIDEO_INFO_UNSET_AFBC(i) \
-  GST_VIDEO_INFO_FLAG_UNSET (i, GST_VIDEO_FLAG_ARM_AFBC)
-#define GST_VIDEO_INFO_IS_AFBC(i) \
-  GST_VIDEO_INFO_FLAG_IS_SET (i, GST_VIDEO_FLAG_ARM_AFBC)
-#endif
-
-/* The MPP requires alignment 16 by default */
-#define GST_MPP_ALIGNMENT 16
-#define GST_MPP_ALIGN(v) GST_ROUND_UP_N (v, GST_MPP_ALIGNMENT)
-
-#ifdef HAVE_RGA
-#define GST_RGA_FORMATS \
-    "NV12, NV21, I420, YV12, NV16, NV61, " \
-    "BGR16, RGB, BGR, RGBA, BGRA, RGBx, BGRx"
-#endif
-
-gboolean gst_mpp_use_rga ();
-
-const gchar *gst_mpp_video_format_to_string (GstVideoFormat format);
 
 GstVideoFormat gst_mpp_mpp_format_to_gst_format (MppFrameFormat mpp_format);
 
@@ -80,16 +51,14 @@ MppFrameFormat gst_mpp_gst_format_to_mpp_format (GstVideoFormat format);
 
 #ifdef HAVE_RGA
 gboolean gst_mpp_rga_convert (GstBuffer * inbuf, GstVideoInfo * src_vinfo,
-    GstMemory * out_mem, GstVideoInfo * dst_vinfo, gint rotation);
+    GstMemory * out_mem, GstVideoInfo * dst_vinfo);
 
 gboolean gst_mpp_rga_convert_from_mpp_frame (MppFrame * mframe,
-    GstMemory * out_mem, GstVideoInfo * dst_vinfo, gint rotation);
+    GstMemory * out_mem, GstVideoInfo * dst_vinfo);
 #endif
 
 gboolean gst_mpp_video_info_align (GstVideoInfo * info,
     gint hstride, gint vstride);
-
-guint gst_mpp_get_pixel_stride (GstVideoInfo * info);
 
 G_END_DECLS;
 

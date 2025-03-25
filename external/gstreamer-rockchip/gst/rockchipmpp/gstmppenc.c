@@ -70,17 +70,13 @@ G_DEFINE_ABSTRACT_TYPE (GstMppEnc, gst_mpp_enc, GST_TYPE_VIDEO_ENCODER);
 #define DEFAULT_PROP_HEADER_MODE MPP_ENC_HEADER_MODE_DEFAULT    /* First frame */
 #define DEFAULT_PROP_SEI_MODE MPP_ENC_SEI_MODE_DISABLE
 #define DEFAULT_PROP_RC_MODE MPP_ENC_RC_MODE_CBR
-#define DEFAULT_PROP_ROTATION 0
+#define DEFAULT_PROP_ROTATION MPP_ENC_ROT_0
 #define DEFAULT_PROP_GOP -1     /* Same as FPS */
 #define DEFAULT_PROP_MAX_REENC 1
 #define DEFAULT_PROP_BPS 0      /* Auto */
 #define DEFAULT_PROP_BPS_MIN 0  /* Auto */
 #define DEFAULT_PROP_BPS_MAX 0  /* Auto */
-#define DEFAULT_PROP_WIDTH 0    /* Original */
-#define DEFAULT_PROP_HEIGHT 0   /* Original */
 #define DEFAULT_PROP_ZERO_COPY_PKT TRUE
-
-#define DEFAULT_FPS 30
 
 enum
 {
@@ -94,96 +90,9 @@ enum
   PROP_BPS,
   PROP_BPS_MIN,
   PROP_BPS_MAX,
-  PROP_WIDTH,
-  PROP_HEIGHT,
   PROP_ZERO_COPY_PKT,
   PROP_LAST,
 };
-
-static const MppFrameFormat gst_mpp_enc_formats[] = {
-  MPP_FMT_YUV420SP,
-  MPP_FMT_YUV420P,
-  MPP_FMT_YUV422_YUYV,
-  MPP_FMT_YUV422_UYVY,
-  MPP_FMT_RGB565LE,
-  MPP_FMT_BGR565LE,
-  MPP_FMT_ARGB8888,
-  MPP_FMT_ABGR8888,
-  MPP_FMT_RGBA8888,
-  MPP_FMT_BGRA8888,
-};
-
-static gboolean
-gst_mpp_enc_format_supported (MppFrameFormat format)
-{
-  guint i;
-
-  for (i = 0; i < ARRAY_SIZE (gst_mpp_enc_formats); i++) {
-    if (format == gst_mpp_enc_formats[i])
-      return TRUE;
-  }
-
-  return FALSE;
-}
-
-gboolean
-gst_mpp_enc_supported (MppCodingType mpp_type)
-{
-  MppCtx mpp_ctx;
-  MppApi *mpi;
-
-  if (mpp_create (&mpp_ctx, &mpi))
-    return FALSE;
-
-  if (mpp_init (mpp_ctx, MPP_CTX_ENC, mpp_type)) {
-    mpp_destroy (mpp_ctx);
-    return FALSE;
-  }
-
-  mpp_destroy (mpp_ctx);
-  return TRUE;
-}
-
-static gboolean
-gst_mpp_enc_video_info_matched (GstVideoInfo * info, GstVideoInfo * other)
-{
-  guint i;
-
-  if (GST_VIDEO_INFO_FORMAT (info) != GST_VIDEO_INFO_FORMAT (other))
-    return FALSE;
-
-  if (GST_VIDEO_INFO_SIZE (info) != GST_VIDEO_INFO_SIZE (other))
-    return FALSE;
-
-  if (GST_VIDEO_INFO_WIDTH (info) != GST_VIDEO_INFO_WIDTH (other))
-    return FALSE;
-
-  if (GST_VIDEO_INFO_HEIGHT (info) != GST_VIDEO_INFO_HEIGHT (other))
-    return FALSE;
-
-  for (i = 0; i < GST_VIDEO_INFO_N_PLANES (info); i++) {
-    if (GST_VIDEO_INFO_PLANE_STRIDE (info,
-            i) != GST_VIDEO_INFO_PLANE_STRIDE (other, i))
-      return FALSE;
-    if (GST_VIDEO_INFO_PLANE_OFFSET (info,
-            i) != GST_VIDEO_INFO_PLANE_OFFSET (other, i))
-      return FALSE;
-  }
-
-  return TRUE;
-}
-
-gboolean
-gst_mpp_enc_video_info_align (GstVideoInfo * info)
-{
-  gint vstride = 0;
-
-  /* Allow skipping vstride aligning for RKVENC */
-  if (g_getenv ("GST_MPP_ENC_UNALIGNED_VSTRIDE"))
-    vstride = GST_MPP_VIDEO_INFO_VSTRIDE (info);
-
-  return gst_mpp_video_info_align (info, 0, vstride);
-}
 
 static void
 gst_mpp_enc_set_property (GObject * object,
@@ -215,6 +124,14 @@ gst_mpp_enc_set_property (GObject * object,
         return;
 
       self->rc_mode = rc_mode;
+      break;
+    }
+    case PROP_ROTATION:{
+      MppEncRotationCfg rotation = g_value_get_enum (value);
+      if (self->rotation == rotation)
+        return;
+
+      self->rotation = rotation;
       break;
     }
     case PROP_GOP:{
@@ -256,27 +173,6 @@ gst_mpp_enc_set_property (GObject * object,
 
       self->bps_max = bps_max;
       break;
-    }
-    case PROP_ROTATION:{
-      if (self->input_state)
-        GST_WARNING_OBJECT (encoder, "unable to change rotation");
-      else
-        self->rotation = g_value_get_enum (value);
-      return;
-    }
-    case PROP_WIDTH:{
-      if (self->input_state)
-        GST_WARNING_OBJECT (encoder, "unable to change width");
-      else
-        self->width = g_value_get_uint (value);
-      return;
-    }
-    case PROP_HEIGHT:{
-      if (self->input_state)
-        GST_WARNING_OBJECT (encoder, "unable to change height");
-      else
-        self->height = g_value_get_uint (value);
-      return;
     }
     case PROP_ZERO_COPY_PKT:{
       self->zero_copy_pkt = g_value_get_boolean (value);
@@ -325,12 +221,6 @@ gst_mpp_enc_get_property (GObject * object,
     case PROP_BPS_MAX:
       g_value_set_uint (value, self->bps_max);
       break;
-    case PROP_WIDTH:
-      g_value_set_uint (value, self->width);
-      break;
-    case PROP_HEIGHT:
-      g_value_set_uint (value, self->height);
-      break;
     case PROP_ZERO_COPY_PKT:
       g_value_set_boolean (value, self->zero_copy_pkt);
       break;
@@ -361,6 +251,7 @@ gst_mpp_enc_apply_properties (GstVideoEncoder * encoder)
           &self->header_mode))
     GST_WARNING_OBJECT (self, "failed to set header mode");
 
+  mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:rotation", self->rotation);
   mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:gop",
       self->gop < 0 ? fps : self->gop);
   mpp_enc_cfg_set_u32 (self->mpp_cfg, "rc:max_reenc_times", self->max_reenc);
@@ -370,22 +261,25 @@ gst_mpp_enc_apply_properties (GstVideoEncoder * encoder)
     self->bps =
         GST_VIDEO_INFO_WIDTH (info) * GST_VIDEO_INFO_HEIGHT (info) / 8 * fps;
 
-  if (!self->bps || self->rc_mode == MPP_ENC_RC_MODE_FIXQP) {
-    /* BPS settings are ignored */
-  } else if (self->rc_mode == MPP_ENC_RC_MODE_CBR) {
+  if (self->rc_mode == MPP_ENC_RC_MODE_CBR) {
     /* CBR mode has narrow bound */
     mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_target", self->bps);
     mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_max",
-        self->bps_max ? : self->bps * 17 / 16);
+        self->bps_max ? self->bps_max : self->bps * 17 / 16);
     mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_min",
-        self->bps_min ? : self->bps * 15 / 16);
+        self->bps_min ? self->bps_min : self->bps * 15 / 16);
   } else if (self->rc_mode == MPP_ENC_RC_MODE_VBR) {
     /* VBR mode has wide bound */
     mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_target", self->bps);
     mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_max",
-        self->bps_max ? : self->bps * 17 / 16);
+        self->bps_max ? self->bps_max : self->bps * 17 / 16);
     mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_min",
-        self->bps_min ? : self->bps * 1 / 16);
+        self->bps_min ? self->bps_min : self->bps * 1 / 16);
+  } else {
+    /* BPS settings are ignored in FIXQP mode */
+    mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_target", -1);
+    mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_max", -1);
+    mpp_enc_cfg_set_s32 (self->mpp_cfg, "rc:bps_min", -1);
   }
 
   if (self->mpi->control (self->mpp_ctx, MPP_ENC_SET_CFG, self->mpp_cfg)) {
@@ -411,12 +305,9 @@ gst_mpp_enc_set_src_caps (GstVideoEncoder * encoder, GstCaps * caps)
 
   output_state = gst_video_encoder_set_output_state (encoder,
       caps, self->input_state);
-
-  GST_VIDEO_INFO_WIDTH (&output_state->info) = GST_VIDEO_INFO_WIDTH (info);
-  GST_VIDEO_INFO_HEIGHT (&output_state->info) = GST_VIDEO_INFO_HEIGHT (info);
   gst_video_codec_state_unref (output_state);
 
-  return gst_video_encoder_negotiate (encoder);
+  return TRUE;
 }
 
 static void
@@ -491,7 +382,7 @@ gst_mpp_enc_start (GstVideoEncoder * encoder)
     goto err_unref_alloc;
 
   if (mpp_init (self->mpp_ctx, MPP_CTX_ENC, self->mpp_type))
-    goto err_destroy_mpp;
+    goto err_unref_alloc;
 
   if (mpp_frame_init (&self->mpp_frame))
     goto err_destroy_mpp;
@@ -580,8 +471,6 @@ gst_mpp_enc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
   GstMppEnc *self = GST_MPP_ENC (encoder);
   GstVideoInfo *info = &self->info;
   MppFrameFormat format;
-  gint width, height;
-  gboolean convert = FALSE;
 
   GST_DEBUG_OBJECT (self, "setting format: %" GST_PTR_FORMAT, state->caps);
 
@@ -598,66 +487,22 @@ gst_mpp_enc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
   self->input_state = gst_video_codec_state_ref (state);
 
   *info = state->info;
-
-  if (!gst_mpp_enc_video_info_align (info))
+  if (!gst_mpp_video_info_align (info, 0, 0))
     return FALSE;
 
   format = gst_mpp_gst_format_to_mpp_format (GST_VIDEO_INFO_FORMAT (info));
-  width = GST_VIDEO_INFO_WIDTH (info);
-  height = GST_VIDEO_INFO_HEIGHT (info);
+  g_return_val_if_fail (format != MPP_FMT_BUTT, FALSE);
 
-  if (self->rotation % 180)
-    SWAP (width, height);
-
-  width = self->width ? : width;
-  height = self->height ? : height;
-
-  /* Check for conversion */
-  if (self->rotation || !gst_mpp_enc_format_supported (format) ||
-      width != GST_VIDEO_INFO_WIDTH (info) ||
-      height != GST_VIDEO_INFO_HEIGHT (info)) {
-    if (!gst_mpp_use_rga ()) {
-      GST_ERROR_OBJECT (self, "unable to convert without RGA");
-      return FALSE;
-    }
-
-    convert = TRUE;
-  }
-
-  /* Check for alignment */
-  if (!gst_mpp_enc_video_info_matched (info, &state->info))
-    convert = TRUE;
-
-  if (convert) {
-    /* Prefer NV12 when using RGA conversion */
-    if (gst_mpp_use_rga ())
-      format = MPP_FMT_YUV420SP;
-
-    gst_video_info_set_format (info, gst_mpp_mpp_format_to_gst_format (format),
-        width, height);
-
-    if (!gst_mpp_enc_video_info_align (info))
-      return FALSE;
-
-    GST_INFO_OBJECT (self, "converting to aligned %s",
-        gst_mpp_video_format_to_string (GST_VIDEO_INFO_FORMAT (info)));
-  }
-
-  mpp_frame_set_fmt (self->mpp_frame, format);
-  mpp_frame_set_width (self->mpp_frame, width);
-  mpp_frame_set_height (self->mpp_frame, height);
+  mpp_frame_set_width (self->mpp_frame, GST_VIDEO_INFO_WIDTH (info));
+  mpp_frame_set_height (self->mpp_frame, GST_VIDEO_INFO_HEIGHT (info));
   mpp_frame_set_hor_stride (self->mpp_frame, GST_MPP_VIDEO_INFO_HSTRIDE (info));
   mpp_frame_set_ver_stride (self->mpp_frame, GST_MPP_VIDEO_INFO_VSTRIDE (info));
 
-  if (!GST_VIDEO_INFO_FPS_N (info) || GST_VIDEO_INFO_FPS_N (info) > 240) {
-    GST_WARNING_OBJECT (self, "framerate (%d/%d) is insane!",
-        GST_VIDEO_INFO_FPS_N (info), GST_VIDEO_INFO_FPS_D (info));
-    GST_VIDEO_INFO_FPS_N (info) = DEFAULT_FPS;
-  }
-
   mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:format", format);
-  mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:width", width);
-  mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:height", height);
+  mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:width",
+      GST_VIDEO_INFO_WIDTH (info));
+  mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:height",
+      GST_VIDEO_INFO_HEIGHT (info));
   mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:hor_stride",
       GST_MPP_VIDEO_INFO_HSTRIDE (info));
   mpp_enc_cfg_set_s32 (self->mpp_cfg, "prep:ver_stride",
@@ -681,14 +526,16 @@ static gboolean
 gst_mpp_enc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
 {
   GstMppEnc *self = GST_MPP_ENC (encoder);
-  GstStructure *config, *params;
   GstVideoAlignment align;
-  GstBufferPool *pool;
   GstVideoInfo info;
+  GstBufferPool *pool;
+  GstStructure *config;
   GstCaps *caps;
   guint size;
 
   GST_DEBUG_OBJECT (self, "propose allocation");
+
+  gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
 
   gst_query_parse_allocation (query, &caps, NULL);
   if (caps == NULL)
@@ -697,23 +544,7 @@ gst_mpp_enc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
   if (!gst_video_info_from_caps (&info, caps))
     return FALSE;
 
-  gst_mpp_enc_video_info_align (&info);
-  size = GST_VIDEO_INFO_SIZE (&info);
-
-  gst_video_alignment_reset (&align);
-  align.padding_right = gst_mpp_get_pixel_stride (&info) -
-      GST_VIDEO_INFO_WIDTH (&info);
-  align.padding_bottom = GST_MPP_VIDEO_INFO_VSTRIDE (&info) -
-      GST_VIDEO_INFO_HEIGHT (&info);
-
-  /* Expose alignment to video-meta */
-  params = gst_structure_new ("video-meta",
-      "padding-top", G_TYPE_UINT, align.padding_top,
-      "padding-bottom", G_TYPE_UINT, align.padding_bottom,
-      "padding-left", G_TYPE_UINT, align.padding_left,
-      "padding-right", G_TYPE_UINT, align.padding_right, NULL);
-  gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, params);
-  gst_structure_free (params);
+  size = MAX (GST_VIDEO_INFO_SIZE (&info), GST_VIDEO_INFO_SIZE (&self->info));
 
   pool = gst_video_buffer_pool_new ();
 
@@ -721,20 +552,54 @@ gst_mpp_enc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
   gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
   gst_buffer_pool_config_set_allocator (config, self->allocator, NULL);
 
-  /* Expose alignment to pool */
+  /* The MPP requires alignment 16 by default */
+  gst_video_alignment_reset (&align);
+  align.padding_right =
+      GST_ROUND_UP_16 (GST_VIDEO_INFO_WIDTH (&info)) -
+      GST_VIDEO_INFO_WIDTH (&info);
+  align.padding_bottom =
+      GST_ROUND_UP_16 (GST_VIDEO_INFO_HEIGHT (&info)) -
+      GST_VIDEO_INFO_HEIGHT (&info);
+
   gst_buffer_pool_config_add_option (config,
       GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
   gst_buffer_pool_config_set_video_alignment (config, &align);
 
   gst_buffer_pool_set_config (pool, config);
 
-  gst_query_add_allocation_pool (query, pool, size, MPP_PENDING_MAX, 0);
+  gst_query_add_allocation_pool (query, pool, size, 0, 0);
   gst_query_add_allocation_param (query, self->allocator, NULL);
 
   gst_object_unref (pool);
 
   return GST_VIDEO_ENCODER_CLASS (parent_class)->propose_allocation (encoder,
       query);
+}
+
+static gboolean
+gst_mpp_enc_video_info_matched (GstVideoInfo * info, GstVideoInfo * other)
+{
+  guint i;
+
+  if (GST_VIDEO_INFO_FORMAT (info) != GST_VIDEO_INFO_FORMAT (other))
+    return FALSE;
+
+  if (GST_VIDEO_INFO_WIDTH (info) != GST_VIDEO_INFO_WIDTH (other))
+    return FALSE;
+
+  if (GST_VIDEO_INFO_HEIGHT (info) != GST_VIDEO_INFO_HEIGHT (other))
+    return FALSE;
+
+  for (i = 0; i < GST_VIDEO_INFO_N_PLANES (info); i++) {
+    if (GST_VIDEO_INFO_PLANE_STRIDE (info,
+            i) != GST_VIDEO_INFO_PLANE_STRIDE (other, i))
+      return FALSE;
+    if (GST_VIDEO_INFO_PLANE_OFFSET (info,
+            i) != GST_VIDEO_INFO_PLANE_OFFSET (other, i))
+      return FALSE;
+  }
+
+  return TRUE;
 }
 
 static GstBuffer *
@@ -769,7 +634,7 @@ gst_mpp_enc_convert (GstVideoEncoder * encoder, GstVideoCodecFrame * frame)
 
   outbuf = gst_buffer_new ();
   if (!outbuf)
-    goto err;
+    return NULL;
 
   gst_buffer_copy_into (outbuf, inbuf,
       GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, 0, 0);
@@ -779,7 +644,7 @@ gst_mpp_enc_convert (GstVideoEncoder * encoder, GstVideoCodecFrame * frame)
       GST_VIDEO_INFO_WIDTH (dst_info), GST_VIDEO_INFO_HEIGHT (dst_info),
       GST_VIDEO_INFO_N_PLANES (dst_info), dst_info->offset, dst_info->stride);
 
-  if (self->rotation || !gst_mpp_enc_video_info_matched (&src_info, dst_info))
+  if (!gst_mpp_enc_video_info_matched (&src_info, dst_info))
     goto convert;
 
   if (gst_buffer_n_memory (inbuf) != 1)
@@ -802,44 +667,38 @@ gst_mpp_enc_convert (GstVideoEncoder * encoder, GstVideoCodecFrame * frame)
 convert:
   out_mem = gst_allocator_alloc (self->allocator,
       GST_VIDEO_INFO_SIZE (dst_info), NULL);
-  if (!out_mem)
-    goto err;
+  if (!out_mem) {
+    gst_buffer_unref (outbuf);
+    return NULL;
+  }
 
   gst_buffer_append_memory (outbuf, out_mem);
 
 #ifdef HAVE_RGA
-  if (gst_mpp_use_rga () &&
-      gst_mpp_rga_convert (inbuf, &src_info, out_mem, dst_info,
-          self->rotation)) {
+  if (gst_mpp_rga_convert (inbuf, &src_info, out_mem, dst_info)) {
     GST_DEBUG_OBJECT (self, "using RGA converted buffer");
     return outbuf;
   }
 #endif
 
-  if (self->rotation ||
-      GST_VIDEO_INFO_FORMAT (&src_info) != GST_VIDEO_INFO_FORMAT (dst_info))
-    goto err;
-
   if (gst_video_frame_map (&src_frame, &src_info, inbuf, GST_MAP_READ)) {
     if (gst_video_frame_map (&dst_frame, dst_info, outbuf, GST_MAP_WRITE)) {
       if (!gst_video_frame_copy (&dst_frame, &src_frame)) {
-        gst_video_frame_unmap (&dst_frame);
-        gst_video_frame_unmap (&src_frame);
-        goto err;
+        gst_buffer_unref (outbuf);
+        outbuf = NULL;
       }
       gst_video_frame_unmap (&dst_frame);
     }
     gst_video_frame_unmap (&src_frame);
   }
 
+  if (!outbuf) {
+    GST_ERROR_OBJECT (self, "failed to convert frame");
+    return NULL;
+  }
+
   GST_DEBUG_OBJECT (self, "using software converted buffer");
   return outbuf;
-err:
-  if (outbuf)
-    gst_buffer_unref (outbuf);
-
-  GST_ERROR_OBJECT (self, "failed to convert frame");
-  return NULL;
 }
 
 static gboolean
@@ -890,8 +749,7 @@ gst_mpp_enc_loop (GstVideoEncoder * encoder)
 
   GST_MPP_ENC_BROADCAST (encoder);
 
-  /* HACK: get the converted input buffer from frame->output_buffer */
-  mem = gst_buffer_peek_memory (frame->output_buffer, 0);
+  mem = gst_buffer_peek_memory (frame->input_buffer, 0);
   mbuf = gst_mpp_mpp_buffer_from_gst_memory (mem);
 
   mframe = self->mpp_frame;
@@ -922,14 +780,14 @@ gst_mpp_enc_loop (GstVideoEncoder * encoder)
     if (!buffer)
       goto error;
 
+    frame->output_buffer = buffer;
+
     /* Allocated from the same DRM allocator in MPP */
     mpp_buffer_set_index (mbuf, gst_mpp_allocator_get_index (self->allocator));
 
     mem = gst_mpp_allocator_import_mppbuf (self->allocator, mbuf);
-    if (!mem) {
-      gst_buffer_unref (buffer);
+    if (!mem)
       goto error;
-    }
 
     gst_memory_resize (mem, 0, pkt_size);
     gst_buffer_append_memory (buffer, mem);
@@ -938,11 +796,10 @@ gst_mpp_enc_loop (GstVideoEncoder * encoder)
     if (!buffer)
       goto error;
 
+    frame->output_buffer = buffer;
+
     gst_buffer_fill (buffer, 0, mpp_buffer_get_ptr (mbuf), pkt_size);
   }
-
-  gst_buffer_replace (&frame->output_buffer, buffer);
-  gst_buffer_unref (buffer);
 
   if (self->flushing && !self->draining)
     goto drop;
@@ -1002,18 +859,15 @@ gst_mpp_enc_handle_frame (GstVideoEncoder * encoder, GstVideoCodecFrame * frame)
 
   GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
   buffer = gst_mpp_enc_convert (encoder, frame);
-  GST_VIDEO_ENCODER_STREAM_LOCK (encoder);
   if (G_UNLIKELY (!buffer))
     goto not_negotiated;
 
-  /* HACK: store the converted input buffer in frame->output_buffer */
-  frame->output_buffer = buffer;
+  gst_buffer_replace (&frame->input_buffer, buffer);
+  gst_buffer_unref (buffer);
 
   /* Avoid holding too much frames */
-  GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
   GST_MPP_ENC_WAIT (encoder, self->pending_frames < MPP_PENDING_MAX
       || self->flushing);
-  GST_VIDEO_ENCODER_STREAM_LOCK (encoder);
 
   self->pending_frames++;
 
@@ -1128,7 +982,6 @@ gst_mpp_enc_rc_mode_get_type (void)
   return rc_mode;
 }
 
-#ifdef HAVE_RGA
 #define GST_TYPE_MPP_ENC_ROTATION (gst_mpp_enc_rotation_get_type ())
 static GType
 gst_mpp_enc_rotation_get_type (void)
@@ -1137,17 +990,16 @@ gst_mpp_enc_rotation_get_type (void)
 
   if (!rotation) {
     static const GEnumValue rotations[] = {
-      {0, "Rotate 0", "0"},
-      {90, "Rotate 90", "90"},
-      {180, "Rotate 180", "180"},
-      {270, "Rotate 270", "270"},
+      {MPP_ENC_ROT_0, "Rotate 0", "0"},
+      {MPP_ENC_ROT_90, "Rotate 90", "90"},
+      {MPP_ENC_ROT_180, "Rotate 180", "180"},
+      {MPP_ENC_ROT_270, "Rotate 270", "270"},
       {0, NULL, NULL}
     };
     rotation = g_enum_register_static ("GstMppEncRotation", rotations);
   }
   return rotation;
 }
-#endif
 
 static void
 gst_mpp_enc_class_init (GstMppEncClass * klass)
@@ -1188,30 +1040,11 @@ gst_mpp_enc_class_init (GstMppEncClass * klass)
           GST_TYPE_MPP_ENC_RC_MODE, DEFAULT_PROP_RC_MODE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-#ifdef HAVE_RGA
-  if (!gst_mpp_use_rga ())
-    goto no_rga;
-
   g_object_class_install_property (gobject_class, PROP_ROTATION,
       g_param_spec_enum ("rotation", "Rotation",
           "Rotation",
           GST_TYPE_MPP_ENC_ROTATION, DEFAULT_PROP_ROTATION,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class, PROP_WIDTH,
-      g_param_spec_uint ("width", "Width",
-          "Width (0 = original)",
-          0, G_MAXINT, DEFAULT_PROP_WIDTH,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class, PROP_HEIGHT,
-      g_param_spec_uint ("height", "Height",
-          "Height (0 = original)",
-          0, G_MAXINT, DEFAULT_PROP_HEIGHT,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-no_rga:
-#endif
 
   g_object_class_install_property (gobject_class, PROP_GOP,
       g_param_spec_int ("gop", "Group of pictures",

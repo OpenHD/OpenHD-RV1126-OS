@@ -30,8 +30,8 @@
 
 #include "gstmppvp8enc.h"
 
-#define GST_MPP_VP8_ENC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
-    GST_TYPE_MPP_VP8_ENC, GstMppVp8Enc))
+#define GST_MPP_Vp8_ENC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
+    GST_TYPE_MPP_Vp8_ENC, GstMppVp8Enc))
 
 #define GST_CAT_DEFAULT mpp_vp8_enc_debug
 GST_DEBUG_CATEGORY (GST_CAT_DEFAULT);
@@ -61,29 +61,31 @@ enum
   PROP_LAST,
 };
 
-#define GST_MPP_VP8_ENC_SIZE_CAPS \
-    "width  = (int) [ 128, MAX ], height = (int) [ 64, MAX ]"
-
 static GstStaticPadTemplate gst_mpp_vp8_enc_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-vp8, " GST_MPP_VP8_ENC_SIZE_CAPS));
+    GST_STATIC_CAPS ("video/x-vp8, "
+        "width  = (int) [ 128, 1920 ], "
+        "height = (int) [ 64, 1088 ], " "framerate = " GST_VIDEO_FPS_RANGE)
+    );
 
 static GstStaticPadTemplate gst_mpp_vp8_enc_sink_template =
-GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw,"
         "format = (string) { " MPP_ENC_FORMATS " }, "
-        GST_MPP_VP8_ENC_SIZE_CAPS));
+        "width  = (int) [ 128, 1920 ], "
+        "height = (int) [ 64, 1088 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ";"));
 
 static void
 gst_mpp_vp8_enc_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec)
 {
   GstVideoEncoder *encoder = GST_VIDEO_ENCODER (object);
-  GstMppVp8Enc *self = GST_MPP_VP8_ENC (encoder);
+  GstMppVp8Enc *self = GST_MPP_Vp8_ENC (encoder);
   GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
   switch (prop_id) {
@@ -124,7 +126,7 @@ gst_mpp_vp8_enc_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec)
 {
   GstVideoEncoder *encoder = GST_VIDEO_ENCODER (object);
-  GstMppVp8Enc *self = GST_MPP_VP8_ENC (encoder);
+  GstMppVp8Enc *self = GST_MPP_Vp8_ENC (encoder);
 
   switch (prop_id) {
     case PROP_QP_INIT:
@@ -145,7 +147,7 @@ gst_mpp_vp8_enc_get_property (GObject * object,
 static gboolean
 gst_mpp_vp8_enc_apply_properties (GstVideoEncoder * encoder)
 {
-  GstMppVp8Enc *self = GST_MPP_VP8_ENC (encoder);
+  GstMppVp8Enc *self = GST_MPP_Vp8_ENC (encoder);
   GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
   if (!mppenc->prop_dirty)
@@ -244,18 +246,4 @@ gst_mpp_vp8_enc_class_init (GstMppVp8EncClass * klass)
       "Rockchip Mpp VP8 Encoder", "Codec/Encoder/Video",
       "Encode video streams via Rockchip Mpp",
       "Jeffy Chen <jeffy.chen@rock-chips.com>");
-}
-
-gboolean
-gst_mpp_vp8_enc_register (GstPlugin * plugin, guint rank)
-{
-  if (!gst_mpp_enc_supported (MPP_VIDEO_CodingVP8))
-    return FALSE;
-
-  if (g_getenv ("GST_MPP_VP8ENC_FAKE_VP8ENC"))
-    gst_element_register (plugin, "vp8enc", GST_RANK_PRIMARY,
-        gst_mpp_vp8_enc_get_type ());
-
-  return gst_element_register (plugin, "mppvp8enc", rank,
-      gst_mpp_vp8_enc_get_type ());
 }

@@ -44,19 +44,6 @@ struct _GstMppVideoDec
 #define parent_class gst_mpp_video_dec_parent_class
 G_DEFINE_TYPE (GstMppVideoDec, gst_mpp_video_dec, GST_TYPE_MPP_DEC);
 
-/* Default output format is auto */
-static GstVideoFormat DEFAULT_PROP_FORMAT = GST_VIDEO_FORMAT_UNKNOWN;
-/* Disable ARM AFBC by default */
-static GstVideoFormat DEFAULT_PROP_ARM_AFBC = FALSE;
-
-enum
-{
-  PROP_0,
-  PROP_FORMAT,
-  PROP_ARM_AFBC,
-  PROP_LAST,
-};
-
 /* GstVideoDecoder base class method */
 static GstStaticPadTemplate gst_mpp_video_dec_sink_template =
     GST_STATIC_PAD_TEMPLATE ("sink",
@@ -82,9 +69,9 @@ static GstStaticPadTemplate gst_mpp_video_dec_src_template =
     GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{" MPP_DEC_FORMATS "}") ";"
-        GST_VIDEO_CAPS_MAKE ("{NV12, NV16, NV12_10LE40}") ", "
-        MPP_DEC_FEATURE_ARM_AFBC " = (int) 1" ";"));
+    GST_STATIC_CAPS ("video/x-raw, "
+        "format = (string) { NV12, NV16, NV12_10LE40 }, "
+        "width  = (int) [ 32, 4096 ], " "height =  (int) [ 32, 4096 ]" ";"));
 
 static MppCodingType
 gst_mpp_video_dec_get_mpp_type (GstStructure * s)
@@ -123,54 +110,6 @@ gst_mpp_video_dec_get_mpp_type (GstStructure * s)
   return MPP_VIDEO_CodingUnused;
 }
 
-static void
-gst_mpp_video_dec_set_property (GObject * object,
-    guint prop_id, const GValue * value, GParamSpec * pspec)
-{
-  GstVideoDecoder *decoder = GST_VIDEO_DECODER (object);
-  GstMppDec *mppdec = GST_MPP_DEC (decoder);
-
-  switch (prop_id) {
-    case PROP_FORMAT:{
-      if (mppdec->input_state)
-        GST_WARNING_OBJECT (decoder, "unable to change output format");
-      else
-        mppdec->format = g_value_get_enum (value);
-      break;
-    }
-    case PROP_ARM_AFBC:{
-      if (mppdec->input_state)
-        GST_WARNING_OBJECT (decoder, "unable to change ARM AFBC");
-      else
-        mppdec->arm_afbc = g_value_get_boolean (value);
-      break;
-    }
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      return;
-  }
-}
-
-static void
-gst_mpp_video_dec_get_property (GObject * object,
-    guint prop_id, GValue * value, GParamSpec * pspec)
-{
-  GstVideoDecoder *decoder = GST_VIDEO_DECODER (object);
-  GstMppDec *mppdec = GST_MPP_DEC (decoder);
-
-  switch (prop_id) {
-    case PROP_FORMAT:
-      g_value_set_enum (value, mppdec->format);
-      break;
-    case PROP_ARM_AFBC:
-      g_value_set_boolean (value, mppdec->arm_afbc);
-      break;
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      break;
-  }
-}
-
 static gboolean
 gst_mpp_video_dec_set_format (GstVideoDecoder * decoder,
     GstVideoCodecState * state)
@@ -178,18 +117,10 @@ gst_mpp_video_dec_set_format (GstVideoDecoder * decoder,
   GstVideoDecoderClass *pclass = GST_VIDEO_DECODER_CLASS (parent_class);
   GstMppDec *mppdec = GST_MPP_DEC (decoder);
   GstStructure *structure;
-  const gchar *chroma_format;
 
   structure = gst_caps_get_structure (state->caps, 0);
   mppdec->mpp_type = gst_mpp_video_dec_get_mpp_type (structure);
   g_return_val_if_fail (mppdec->mpp_type != MPP_VIDEO_CodingUnused, FALSE);
-
-  /* MPP doesn't support YUV444 for h264 */
-  if (mppdec->mpp_type == MPP_VIDEO_CodingAVC) {
-    chroma_format = gst_structure_get_string (structure, "chroma-format");
-    if (g_strcmp0 (chroma_format, "4:4:4") == 0)
-      return FALSE;
-  }
 
   return pclass->set_format (decoder, state);
 }
@@ -219,21 +150,14 @@ gst_mpp_video_dec_startup (GstVideoDecoder * decoder)
     gst_buffer_unref (codec_data);
   }
 
-  /* Some MPP codecs(RKV) need this to apply an odd-256 align to the hor
-     stride to speed up decoding. */
+  /* Legacy way to inform MPP codec of video info, needed by RKVDEC */
   mpp_frame_init (&mframe);
   mpp_frame_set_width (mframe, GST_VIDEO_INFO_WIDTH (&state->info));
   mpp_frame_set_height (mframe, GST_VIDEO_INFO_HEIGHT (&state->info));
-  mpp_frame_set_fmt (mframe, MPP_FMT_YUV420SP);
+  mpp_frame_set_fmt (mframe, (MppFrameFormat) mppdec->mpp_type);
   mppdec->mpi->control (mppdec->mpp_ctx, MPP_DEC_SET_FRAME_INFO,
       (MppParam) mframe);
   mpp_frame_deinit (&mframe);
-
-  if (mppdec->arm_afbc) {
-    MppFrameFormat mpp_format = MPP_FMT_YUV420SP | MPP_FRAME_FBC_AFBC_V2;
-    mppdec->mpi->control (mppdec->mpp_ctx, MPP_DEC_SET_OUTPUT_FORMAT,
-        &mpp_format);
-  }
 
   self->poll_timeout = 0;
 
@@ -314,61 +238,9 @@ gst_mpp_video_dec_shutdown (GstVideoDecoder * decoder, gboolean drain)
   return TRUE;
 }
 
-#define GST_TYPE_MPP_VIDEO_DEC_FORMAT (gst_mpp_video_dec_format_get_type ())
-static GType
-gst_mpp_video_dec_format_get_type (void)
-{
-  static GType format = 0;
-
-  if (!format) {
-    static const GEnumValue formats[] = {
-      {GST_VIDEO_FORMAT_UNKNOWN, "Auto", "auto"},
-      {GST_VIDEO_FORMAT_NV12, "NV12", "NV12"},
-      {GST_VIDEO_FORMAT_NV21, "NV21", "NV21"},
-      {GST_VIDEO_FORMAT_I420, "I420", "I420"},
-      {GST_VIDEO_FORMAT_YV12, "YV12", "YV12"},
-      {GST_VIDEO_FORMAT_NV16, "NV16", "NV16"},
-      {GST_VIDEO_FORMAT_NV61, "NV61", "NV61"},
-      {GST_VIDEO_FORMAT_BGR16, "BGR565", "BGR16"},
-      {GST_VIDEO_FORMAT_RGB, "RGB", "RGB"},
-      {GST_VIDEO_FORMAT_BGR, "BGR", "BGR"},
-      {GST_VIDEO_FORMAT_RGBA, "RGBA8888", "RGBA"},
-      {GST_VIDEO_FORMAT_BGRA, "BGRA8888", "BGRA"},
-      {GST_VIDEO_FORMAT_RGBx, "RGBX8888", "RGBx"},
-      {GST_VIDEO_FORMAT_BGRx, "BGRX8888", "BGRx"},
-      {0, NULL, NULL}
-    };
-    format = g_enum_register_static ("GstMppVideoDecFormat", formats);
-  }
-  return format;
-}
-
 static void
-gst_mpp_video_dec_init (GstMppVideoDec * self)
+gst_mpp_video_dec_init (GstMppVideoDec * self UNUSED)
 {
-  GstMppDec *mppdec = GST_MPP_DEC (self);
-  mppdec->format = DEFAULT_PROP_FORMAT;
-  mppdec->arm_afbc = DEFAULT_PROP_ARM_AFBC;
-}
-
-static void
-gst_mpp_video_dec_setup_default_format (void)
-{
-  GEnumClass *class;
-  GEnumValue *value;
-  const gchar *env;
-
-  env = g_getenv ("GST_MPP_VIDEODEC_DEFAULT_FORMAT");
-  if (!env)
-    return;
-
-  class = g_type_class_ref (GST_TYPE_MPP_VIDEO_DEC_FORMAT);
-
-  value = g_enum_get_value_by_nick (class, env);
-  if (value)
-    DEFAULT_PROP_FORMAT = value->value;
-
-  g_type_class_unref (class);
 }
 
 static void
@@ -376,7 +248,6 @@ gst_mpp_video_dec_class_init (GstMppVideoDecClass * klass)
 {
   GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_CLASS (klass);
   GstMppDecClass *pclass = GST_MPP_DEC_CLASS (klass);
-  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
   GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "mppvideodec", 0,
@@ -391,29 +262,6 @@ gst_mpp_video_dec_class_init (GstMppVideoDecClass * klass)
   pclass->poll_mpp_frame = GST_DEBUG_FUNCPTR (gst_mpp_video_dec_poll_mpp_frame);
   pclass->shutdown = GST_DEBUG_FUNCPTR (gst_mpp_video_dec_shutdown);
 
-  gobject_class->set_property =
-      GST_DEBUG_FUNCPTR (gst_mpp_video_dec_set_property);
-  gobject_class->get_property =
-      GST_DEBUG_FUNCPTR (gst_mpp_video_dec_get_property);
-
-  gst_mpp_video_dec_setup_default_format ();
-
-#ifdef HAVE_RGA
-  g_object_class_install_property (gobject_class, PROP_FORMAT,
-      g_param_spec_enum ("format", "Prefered output format",
-          "Prefered output format",
-          GST_TYPE_MPP_VIDEO_DEC_FORMAT, DEFAULT_PROP_FORMAT,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-#endif
-
-  if (g_getenv ("GST_MPP_VIDEODEC_DEFAULT_ARM_AFBC"))
-    DEFAULT_PROP_ARM_AFBC = TRUE;
-
-  g_object_class_install_property (gobject_class, PROP_ARM_AFBC,
-      g_param_spec_boolean ("arm-afbc", "ARM AFBC",
-          "Prefer ARM AFBC compressed format", DEFAULT_PROP_ARM_AFBC,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&gst_mpp_video_dec_src_template));
 
@@ -425,11 +273,4 @@ gst_mpp_video_dec_class_init (GstMppVideoDecClass * klass)
       "Multicodec (HEVC / AVC / VP8 / VP9) hardware decoder",
       "Randy Li <randy.li@rock-chips.com>, "
       "Jeffy Chen <jeffy.chen@rock-chips.com>");
-}
-
-gboolean
-gst_mpp_video_dec_register (GstPlugin * plugin, guint rank)
-{
-  return gst_element_register (plugin, "mppvideodec", rank,
-      gst_mpp_video_dec_get_type ());
 }

@@ -1,7 +1,8 @@
-/* GStreamer
- * Copyright (C) <2021> Collabora Ltd.
- *   Author: Nicolas Dufresne <nicolas.dufresne@collabora.com>
- *   Author: Julian Bouzas <julian.bouzas@collabora.com>
+/*
+ * glib-compat.c
+ * Functions copied from glib 2.10
+ *
+ * Copyright 2005 David Schleef <ds@schleef.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,20 +20,17 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef __GST_MPP_VPX_ALPHA_DECODE_BIN_H__
-#define __GST_MPP_VPX_ALPHA_DECODE_BIN_H__
+#ifndef __GLIB_COMPAT_PRIVATE_H__
+#define __GLIB_COMPAT_PRIVATE_H__
 
-#include "gstmppalphadecodebin.h"
+#include <glib.h>
 
-G_BEGIN_DECLS;
+G_BEGIN_DECLS
 
-#define GST_TYPE_MPP_VPX_ALPHA_DECODE_BIN (gst_mpp_vpx_alpha_decode_bin_get_type())
-G_DECLARE_FINAL_TYPE (GstMppVpxAlphaDecodeBin,
-    gst_mpp_vpx_alpha_decode_bin, GST, MPP_VPX_ALPHA_DECODE_BIN,
-    GstMppAlphaDecodeBin);
+/* copies */
 
-gboolean gst_mpp_vpx_alpha_decode_bin_register (GstPlugin * plugin, guint rank);
+/* adaptations */
 
-G_END_DECLS;
+G_END_DECLS
 
-#endif /* __GST_MPP_VPX_ALPHA_DECODE_BIN_H__ */
+#endif

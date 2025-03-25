@@ -78,26 +78,28 @@ enum
   PROP_LAST,
 };
 
-#define GST_MPP_H264_ENC_SIZE_CAPS \
-    "width  = (int) [ 96, MAX ], height = (int) [ 64, MAX ]"
-
 static GstStaticPadTemplate gst_mpp_h264_enc_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-h264, "
-        GST_MPP_H264_ENC_SIZE_CAPS ","
+        "width  = (int) [ 96, 1920 ], "
+        "height = (int) [ 64, 2176 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ", "
         "stream-format = (string) { byte-stream }, "
         "alignment = (string) { au }, "
-        "profile = (string) { baseline, main, high }"));
+        "profile = (string) { baseline, main, high }")
+    );
 
 static GstStaticPadTemplate gst_mpp_h264_enc_sink_template =
-GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw,"
         "format = (string) { " MPP_ENC_FORMATS " }, "
-        GST_MPP_H264_ENC_SIZE_CAPS));
+        "width  = (int) [ 96, 1920 ], "
+        "height = (int) [ 64, 2176 ], "
+        "framerate = " GST_VIDEO_FPS_RANGE ";"));
 
 #define GST_TYPE_MPP_H264_ENC_PROFILE (gst_mpp_h264_enc_profile_get_type ())
 static GType
@@ -425,14 +427,4 @@ gst_mpp_h264_enc_class_init (GstMppH264EncClass * klass)
       "Encode video streams via Rockchip Mpp",
       "Randy Li <randy.li@rock-chips.com>, "
       "Jeffy Chen <jeffy.chen@rock-chips.com>");
-}
-
-gboolean
-gst_mpp_h264_enc_register (GstPlugin * plugin, guint rank)
-{
-  if (!gst_mpp_enc_supported (MPP_VIDEO_CodingAVC))
-    return FALSE;
-
-  return gst_element_register (plugin, "mpph264enc", rank,
-      gst_mpp_h264_enc_get_type ());
 }
