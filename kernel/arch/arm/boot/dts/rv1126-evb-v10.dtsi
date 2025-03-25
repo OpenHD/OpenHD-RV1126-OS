@@ -853,7 +853,7 @@
 	};
 };
 
-&i2c1 {
+&i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
 
@@ -907,23 +907,18 @@
 		};
 	};
 
-	imx335: imx335@1a {
-		compatible = "sony,imx335";
-		reg = <0x1a>;
+	arducam_pivariety: arducam-pivariety@c {
+		compatible = "arducam,arducam-pivariety";
+		reg = <0x0c>;
 		clocks = <&cru CLK_MIPICSI_OUT>;
-		clock-names = "xvclk";
-		power-domains = <&power RV1126_PD_VI>;
+		clock-names = "xclk";
 		pinctrl-names = "rockchip,camera_default";
 		pinctrl-0 = <&mipicsi_clk0>;
-		avdd-supply = <&vcc_avdd>;
-		dovdd-supply = <&vcc_dovdd>;
-		dvdd-supply = <&vcc_dvdd>;
-		pwdn-gpios = <&gpio1 RK_PD4 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 RK_PD4 GPIO_ACTIVE_HIGH>;
 		rockchip,camera-module-index = <1>;
-		rockchip,camera-module-facing = "front";
-		rockchip,camera-module-name = "MTV4-IR-E-P";
-		rockchip,camera-module-lens-name = "40IRC-4MP-F16";
-		ir-cut = <&cam_ircut0>;
+		rockchip,camera-module-facing = "back";
+		rockchip,camera-module-name = "arducam-pivariety";
+		rockchip,camera-module-lens-name = "default";
 		port {
 			ucam_out3: endpoint {
 				remote-endpoint = <&mipi_in_ucam3>;
@@ -984,20 +979,6 @@
 				data-lanes = <1 2 3 4>;
 			};
 		};
-	};
-};
-
-&i2c5 {
-	status = "okay";
-	clock-frequency = <400000>;
-
-	gt1x: gt1x@14 {
-		compatible = "goodix,gt1x";
-		reg = <0x14>;
-		gtp_ics_slot_report;
-		power-supply = <&vcc18_lcd_n>;
-		goodix,rst-gpio = <&gpio2 RK_PB0 GPIO_ACTIVE_HIGH>;
-		goodix,irq-gpio = <&gpio2 RK_PB2 GPIO_ACTIVE_LOW>;
 	};
 };
 

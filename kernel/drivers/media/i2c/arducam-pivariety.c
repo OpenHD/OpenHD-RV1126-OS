@@ -877,11 +877,6 @@ static int pivariety_set_stream(struct v4l2_subdev *sd, int enable)
 	 * vflip and hflip cannot change during streaming
 	 * Pivariety may not implement flip control.
 	 */
-	if (pivariety->vflip)
-		__v4l2_ctrl_grab(pivariety->vflip, enable);
-
-	if (pivariety->hflip)
-		__v4l2_ctrl_grab(pivariety->hflip, enable);
 
 	mutex_unlock(&pivariety->mutex);
 
@@ -1189,9 +1184,7 @@ static struct v4l2_ctrl *v4l2_ctrl_new_arducam(struct v4l2_ctrl_handler *hdl,
 static int pivariety_enum_controls(struct pivariety *pivariety)
 {
 	struct v4l2_subdev *sd = &pivariety->sd;
-	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct v4l2_ctrl_handler *ctrl_hdlr = &pivariety->ctrl_handler;
-	struct v4l2_fwnode_device_properties props;
 	struct v4l2_ctrl **ctrl = pivariety->ctrls;
 	int ret, index, num_ctrls;
 	u32 id, min, max, def, step;
@@ -1281,15 +1274,15 @@ static int pivariety_enum_controls(struct pivariety *pivariety)
 
 	pivariety_write(pivariety, CTRL_INDEX_REG, 0);
 
-	ret = v4l2_fwnode_device_parse(&client->dev, &props);
-	if (ret)
-		goto err;
+	// ret = v4l2_fwnode_device_parse(&client->dev, &props);
+	// if (ret)
+	// 	goto err;
 
-	ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr,
-					      &pivariety_ctrl_ops,
-					      &props);
-	if (ret)
-		goto err;
+	// ret = v4l2_ctrl_new_fwnode_properties(ctrl_hdlr,
+	// 				      &pivariety_ctrl_ops,
+	// 				      &props);
+	// if (ret)
+	// 	goto err;
 
 	pivariety->sd.ctrl_handler = ctrl_hdlr;
 	v4l2_ctrl_handler_setup(ctrl_hdlr);
@@ -1300,34 +1293,41 @@ err:
 
 static int pivariety_parse_dt(struct pivariety *pivariety, struct device *dev)
 {
-	struct fwnode_handle *endpoint;
-	struct v4l2_fwnode_endpoint ep_cfg = {
-		.bus_type = V4L2_MBUS_CSI2_DPHY
-	};
-	int ret = -EINVAL;
+    struct fwnode_handle *endpoint;
+    /* Same stack-based declaration, no bus_type needed */
+    struct v4l2_fwnode_endpoint ep_cfg = { 0 };
+    int ret = -EINVAL;
 
-	/* Get CSI2 bus config */
-	endpoint = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
-	if (!endpoint) {
-		dev_err(dev, "endpoint node not found\n");
-		return -EINVAL;
-	}
+    /* Get CSI2 bus config */
+    endpoint = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
+    if (!endpoint) {
+        dev_err(dev, "endpoint node not found\n");
+        return -EINVAL;
+    }
 
-	if (v4l2_fwnode_endpoint_alloc_parse(endpoint, &ep_cfg)) {
-		dev_err(dev, "could not parse endpoint\n");
-		goto error_out;
-	}
+    /*
+     * Replace the alloc version with the older parse() call.
+     * "alloc_parse" doesn't exist on 4.19.
+     */
+    if (v4l2_fwnode_endpoint_parse(endpoint, &ep_cfg)) {
+        dev_err(dev, "could not parse endpoint\n");
+        goto error_out;
+    }
 
-	//pivariety->bus = ep_cfg.bus.mipi_csi2;
+    // If you need the MIPI bus data from ep_cfg, store it here:
+    // pivariety->bus = ep_cfg.bus.mipi_csi2;
 
-	ret = 0;
+    ret = 0;
 
 error_out:
-	v4l2_fwnode_endpoint_free(&ep_cfg);
-	fwnode_handle_put(endpoint);
-
-	return ret;
+    /*
+     * We remove v4l2_fwnode_endpoint_free(&ep_cfg) because
+     * v4l2_fwnode_endpoint_parse() doesn't require freeing.
+     */
+    fwnode_handle_put(endpoint);
+    return ret;
 }
+
 
 static int pivariety_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
