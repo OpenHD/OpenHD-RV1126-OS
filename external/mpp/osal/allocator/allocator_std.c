@@ -23,13 +23,13 @@
 #include "allocator_std.h"
 
 typedef struct {
-    size_t alignment;
-    RK_S32 fd_count;
+    size_t              alignment;
+    MppAllocFlagType    flags;
+    RK_S32              fd_count;
 } allocator_ctx;
 
-static MPP_RET allocator_std_open(void **ctx, MppAllocatorCfg *cfg)
+static MPP_RET allocator_std_open(void **ctx, size_t alignment, MppAllocFlagType flags)
 {
-    MPP_RET ret = MPP_OK;
     allocator_ctx *p = NULL;
 
     if (NULL == ctx) {
@@ -37,31 +37,30 @@ static MPP_RET allocator_std_open(void **ctx, MppAllocatorCfg *cfg)
         return MPP_ERR_NULL_PTR;
     }
 
-    p = mpp_malloc(allocator_ctx, 1);
-    if (NULL == p) {
-        mpp_err_f("failed to allocate context\n");
-        ret = MPP_ERR_MALLOC;
-    } else
-        p->alignment = cfg->alignment;
+    mpp_err_f("Warning: std allocator should be used on simulation mode only\n");
 
-    p->fd_count = 0;
+    p = mpp_malloc(allocator_ctx, 1);
+    if (p) {
+        p->alignment = alignment;
+        p->flags = flags;
+        p->fd_count = 0;
+    }
 
     *ctx = p;
-    return ret;
+    return p ? MPP_OK : MPP_NOK;
 }
 
 static MPP_RET allocator_std_alloc(void *ctx, MppBufferInfo *info)
 {
-    allocator_ctx *p = NULL;
-
     if (NULL == ctx) {
         mpp_err_f("found NULL context input\n");
         return MPP_ERR_NULL_PTR;
     }
 
-    p = (allocator_ctx *)ctx;
-    info->fd = p->fd_count++;
-    return (MPP_RET)os_malloc(&info->ptr, p->alignment, info->size);
+    mpp_err_f("Warning: std allocator should be used on simulation mode only\n");
+    (void)info;
+
+    return MPP_NOK;
 }
 
 static MPP_RET allocator_std_free(void *ctx, MppBufferInfo *info)
@@ -105,15 +104,18 @@ static MPP_RET allocator_std_mmap(void *ctx, MppBufferInfo *info)
 
 static MPP_RET allocator_std_close(void *ctx)
 {
-    if (ctx) {
-        mpp_free(ctx);
-        return MPP_OK;
-    }
-    mpp_err_f("found NULL context input\n");
-    return MPP_NOK;
+    MPP_FREE(ctx);
+    return MPP_OK;
+}
+
+static MppAllocFlagType os_allocator_std_flags(void *ctx)
+{
+    (void) ctx;
+    return MPP_ALLOC_FLAG_NONE;
 }
 
 os_allocator allocator_std = {
+    .type = MPP_BUFFER_TYPE_NORMAL,
     .open = allocator_std_open,
     .close = allocator_std_close,
     .alloc = allocator_std_alloc,
@@ -121,5 +123,5 @@ os_allocator allocator_std = {
     .import = allocator_std_import,
     .release = allocator_std_release,
     .mmap = allocator_std_mmap,
+    .flags = os_allocator_std_flags,
 };
-

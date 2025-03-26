@@ -76,6 +76,8 @@ static MPP_RET mpp_dec_update_cfg(MppDecImpl *p)
     p->enable_deinterlace   = base->enable_vproc;
     p->disable_error        = base->disable_error;
 
+    mpp_env_get_u32("enable_deinterlace", &p->enable_deinterlace, base->enable_vproc);
+
     return MPP_OK;
 }
 
@@ -111,6 +113,10 @@ MPP_RET mpp_dec_proc_cfg(MppDecImpl *dec, MpiCmd cmd, void *param)
     case MPP_DEC_SET_FRAME_INFO : {
         MppFrame frame = (MppFrame)param;
 
+        /* update output frame format */
+        dec->cfg.base.out_fmt = mpp_frame_get_fmt(frame);
+        mpp_log_f("found MPP_DEC_SET_FRAME_INFO fmt %x\n", dec->cfg.base.out_fmt);
+
         mpp_slots_set_prop(dec->frame_slots, SLOTS_FRAME_INFO, frame);
 
         mpp_log("setting default w %4d h %4d h_str %4d v_str %4d\n",
@@ -135,7 +141,8 @@ MPP_RET mpp_dec_proc_cfg(MppDecImpl *dec, MpiCmd cmd, void *param)
     case MPP_DEC_SET_OUTPUT_FORMAT :
     case MPP_DEC_SET_DISABLE_ERROR :
     case MPP_DEC_SET_ENABLE_DEINTERLACE :
-    case MPP_DEC_SET_ENABLE_FAST_PLAY : {
+    case MPP_DEC_SET_ENABLE_FAST_PLAY :
+    case MPP_DEC_SET_ENABLE_MVC : {
         ret = mpp_dec_set_cfg_by_cmd(&dec->cfg, cmd, param);
         mpp_dec_update_cfg(dec);
         dec->cfg.base.change = 0;
@@ -257,10 +264,6 @@ void mpp_dec_put_frame(Mpp *mpp, RK_S32 index, HalDecTaskFlag flags)
                 ret = hal_task_get_hnd(group, TASK_IDLE, &hnd);
                 if (ret) {
                     if (dec->reset_flag) {
-                        MppBuffer buffer = NULL;
-                        mpp_buf_slot_get_prop(slots, index, SLOT_BUFFER, &buffer);
-                        if (buffer)
-                            mpp_buffer_put(buffer);
                         return;
                     } else {
                         msleep(10);
@@ -387,13 +390,14 @@ void mpp_dec_put_frame(Mpp *mpp, RK_S32 index, HalDecTaskFlag flags)
     }
 }
 
-void mpp_dec_push_display(Mpp *mpp, HalDecTaskFlag flags)
+RK_S32 mpp_dec_push_display(Mpp *mpp, HalDecTaskFlag flags)
 {
     RK_S32 index = -1;
     MppDecImpl *dec = (MppDecImpl *)mpp->mDec;
     MppBufSlots frame_slots = dec->frame_slots;
     RK_U32 eos = flags.eos;
     HalDecTaskFlag tmp = flags;
+    RK_S32 ret = 0;
 
     tmp.eos = 0;
     /**
@@ -405,8 +409,10 @@ void mpp_dec_push_display(Mpp *mpp, HalDecTaskFlag flags)
      * nothing to do with frames being output.
      */
     tmp.info_change = 0;
+
     if (dec->thread_hal)
         dec->thread_hal->lock(THREAD_OUTPUT);
+
     while (MPP_OK == mpp_buf_slot_dequeue(frame_slots, &index, QUEUE_DISPLAY)) {
         /* deal with current frame */
         if (eos && mpp_slots_is_empty(frame_slots, QUEUE_DISPLAY))
@@ -414,9 +420,13 @@ void mpp_dec_push_display(Mpp *mpp, HalDecTaskFlag flags)
 
         mpp_dec_put_frame(mpp, index, tmp);
         mpp_buf_slot_clr_flag(frame_slots, index, SLOT_QUEUE_USE);
+        ret++;
     }
+
     if (dec->thread_hal)
         dec->thread_hal->unlock(THREAD_OUTPUT);
+
+    return ret;
 }
 
 MPP_RET update_dec_hal_info(MppDecImpl *dec, MppFrame frame)
@@ -521,6 +531,9 @@ MPP_RET mpp_dec_set_cfg(MppDecCfgSet *dst, MppDecCfgSet *src)
         if (change & MPP_DEC_CFG_CHANGE_ENABLE_THUMBNAIL)
             dst_base->enable_thumbnail = src_base->enable_thumbnail;
 
+        if (change & MPP_DEC_CFG_CHANGE_ENABLE_MVC)
+            dst_base->enable_mvc = src_base->enable_mvc;
+
         if (change & MPP_DEC_CFG_CHANGE_DISABLE_THREAD)
             dst_base->disable_thread = src_base->disable_thread;
 
@@ -566,6 +579,14 @@ MPP_RET mpp_dec_callback_hal_to_parser(const char *caller, void *ctx,
     return ret;
 }
 
+MPP_RET mpp_dec_callback_slot(const char *caller, void *ctx, RK_S32 cmd, void *param)
+{
+    (void) caller;
+    (void) cmd;
+    (void) param;
+    return mpp_dec_notify((MppDec)ctx, MPP_DEC_NOTIFY_SLOT_VALID);
+}
+
 MPP_RET mpp_dec_init(MppDec *dec, MppDecInitCfg *cfg)
 {
     RK_S32 i;
@@ -581,6 +602,7 @@ MPP_RET mpp_dec_init(MppDec *dec, MppDecInitCfg *cfg)
     MppDecCfgSet *dec_cfg = NULL;
     RK_U32 hal_task_count = 2;
     RK_U32 support_fast_mode = 0;
+    SlotHalFbcAdjCfg hal_fbc_adj_cfg;
 
     mpp_env_get_u32("mpp_dec_debug", &mpp_dec_debug, 0);
 
@@ -619,6 +641,14 @@ MPP_RET mpp_dec_init(MppDec *dec, MppDecInitCfg *cfg)
             break;
         }
 
+        MppCbCtx cb_ctx = {
+            mpp_dec_callback_slot,
+            (void *)p,
+            0,
+        };
+
+        mpp_buf_slot_set_callback(frame_slots, &cb_ctx);
+
         ret = mpp_buf_slot_init(&packet_slots);
         if (ret) {
             mpp_err_f("could not init packet buffer slot\n");
@@ -635,7 +665,10 @@ MPP_RET mpp_dec_init(MppDec *dec, MppDecInitCfg *cfg)
             NULL,
             NULL,
             0,
+            &hal_fbc_adj_cfg,
         };
+
+        memset(&hal_fbc_adj_cfg, 0, sizeof(hal_fbc_adj_cfg));
 
         ret = mpp_hal_init(&hal, &hal_cfg);
         if (ret) {
@@ -643,10 +676,14 @@ MPP_RET mpp_dec_init(MppDec *dec, MppDecInitCfg *cfg)
             break;
         }
 
+        if (hal_fbc_adj_cfg.func)
+            mpp_slots_set_prop(frame_slots, SLOTS_HAL_FBC_ADJ, &hal_fbc_adj_cfg);
+
         support_fast_mode = hal_cfg.support_fast_mode;
 
         if (dec_cfg->base.fast_parse && support_fast_mode) {
-            hal_task_count = 3;
+            hal_task_count = dec_cfg->status.hal_task_count ?
+                             dec_cfg->status.hal_task_count : 3;
         } else {
             dec_cfg->base.fast_parse = 0;
             p->parser_fast_mode = 0;
@@ -1015,6 +1052,11 @@ MPP_RET mpp_dec_set_cfg_by_cmd(MppDecCfgSet *set, MpiCmd cmd, void *param)
         cfg->enable_fast_play = (param) ? (*((RK_U32 *)param)) : (0);
         cfg->change |= MPP_DEC_CFG_CHANGE_ENABLE_FAST_PLAY;
         dec_dbg_func("disable idr immediately output %d\n", cfg->enable_fast_play);
+    } break;
+    case MPP_DEC_SET_ENABLE_MVC : {
+        cfg->enable_mvc = (param) ? (*((RK_U32 *)param)) : (0);
+        cfg->change |= MPP_DEC_CFG_CHANGE_ENABLE_MVC;
+        dec_dbg_func("enable MVC decoder %d\n", cfg->enable_mvc);
     } break;
     default : {
         mpp_err_f("unsupported cfg update cmd %x\n", cmd);

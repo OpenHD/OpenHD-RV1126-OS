@@ -29,6 +29,7 @@
 #include "mpp_packet_impl.h"
 #include "mpp_buffer_impl.h"
 #include "mpp_frame.h"
+#include "mpp_compat.h"
 
 #define VPU_API_ENC_INPUT_TIMEOUT 100
 
@@ -273,18 +274,21 @@ VpuApiLegacy::VpuApiLegacy() :
     set_eos(0),
     memGroup(NULL),
     format(MPP_FMT_YUV420P),
+    mInputTimeOutMs(0),
     fd_input(-1),
     fd_output(-1),
     mEosSet(0),
     enc_cfg(NULL),
     enc_hdr_pkt(NULL),
     enc_hdr_buf(NULL),
-    enc_hdr_buf_size(0)
+    enc_hdr_buf_size(0),
+    dec_out_frm_struct_type(0)
 {
     vpu_api_dbg_func("enter\n");
 
     mpp_create(&mpp_ctx, &mpi);
 
+    memset(&frm_rdy_cb, 0, sizeof(FrameRdyCB));
     memset(&enc_param, 0, sizeof(enc_param));
 
     mlvec = NULL;
@@ -569,12 +573,12 @@ static void setup_VPU_FRAME_from_mpp_frame(VPU_FRAME *vframe, MppFrame mframe)
     } break;
     }
 
-    switch (colorPri) {
-    case MPP_FRAME_PRI_BT2020: {
-        vframe->ColorType |= VPU_OUTPUT_FORMAT_COLORSPACE_BT2020;
+    switch (mpp_frame_get_fmt(mframe) & MPP_FRAME_FBC_MASK) {
+    case MPP_FRAME_FBC_AFBC_V1: {
+        vframe->ColorType |= VPU_OUTPUT_FORMAT_FBC_AFBC_V1;
     } break;
-    case MPP_FRAME_PRI_BT709: {
-        vframe->ColorType |= VPU_OUTPUT_FORMAT_COLORSPACE_BT709;
+    case MPP_FRAME_FBC_AFBC_V2: {
+        vframe->ColorType |= VPU_OUTPUT_FORMAT_FBC_AFBC_V2;
     } break;
     default: {
     } break;
@@ -586,9 +590,6 @@ static void setup_VPU_FRAME_from_mpp_frame(VPU_FRAME *vframe, MppFrame mframe)
     } break;
     case MPP_FRAME_TRC_ARIB_STD_B67: {
         vframe->ColorType |= VPU_OUTPUT_FORMAT_DYNCRANGE_HDR_HLG; //HDR_HLG
-    } break;
-    case MPP_FRAME_TRC_BT2020_10: {
-        vframe->ColorType |= VPU_OUTPUT_FORMAT_COLORSPACE_BT2020; //BT2020
     } break;
     default: {
     } break;
@@ -608,6 +609,41 @@ static void setup_VPU_FRAME_from_mpp_frame(VPU_FRAME *vframe, MppFrame mframe)
         vframe->vpumem.size = vframe->FrameWidth * vframe->FrameHeight * 3 / 2;
         vframe->vpumem.offset = (RK_U32*)buf;
     }
+}
+
+static void setup_video_frame_meta(VideoFrame_t *videoFrame, MppFrame mframe)
+{
+    if (mpp_frame_get_thumbnail_en(mframe)) {
+        MppMeta meta = NULL;
+        RK_S32 yOffset = 0;
+        RK_S32 uvOffset = 0;
+
+        meta = mpp_frame_get_meta(mframe);
+        mpp_meta_get_s32(meta, KEY_DEC_TBN_Y_OFFSET, &yOffset);
+        mpp_meta_get_s32(meta, KEY_DEC_TBN_UV_OFFSET, &uvOffset);
+        if (yOffset && uvOffset) {
+            videoFrame->thumbInfo.enable = 1;
+            videoFrame->thumbInfo.yOffset = yOffset;
+            videoFrame->thumbInfo.uvOffset = uvOffset;
+        } else {
+            videoFrame->thumbInfo.enable = 0;
+        }
+    }
+
+    if (MPP_FRAME_FMT_IS_HDR(mpp_frame_get_fmt(mframe))) {
+        MppMeta meta = NULL;
+        RK_S32 offset = 0;
+        RK_S32 size = 0;
+
+        meta = mpp_frame_get_meta(mframe);
+        mpp_meta_get_s32(meta, KEY_HDR_META_OFFSET, &offset);
+        mpp_meta_get_s32(meta, KEY_HDR_META_SIZE, &size);
+        videoFrame->hdrInfo.isHdr = 1;
+        videoFrame->hdrInfo.offset = offset;
+        videoFrame->hdrInfo.size = size;
+    }
+
+    videoFrame->viewId = mpp_frame_get_viewid(mframe);
 }
 
 RK_S32 VpuApiLegacy::decode(VpuCodecContext *ctx, VideoPacket_t *pkt, DecoderOut_t *aDecOut)
@@ -817,12 +853,23 @@ RK_S32 VpuApiLegacy::decode(VpuCodecContext *ctx, VideoPacket_t *pkt, DecoderOut
         if (ret || NULL == mframe) {
             aDecOut->size = 0;
         } else {
-            VPU_FRAME *vframe = (VPU_FRAME *)aDecOut->data;
+            VPU_FRAME *vframe = NULL;
             MppBuffer buf = mpp_frame_get_buffer(mframe);
+
+            if (dec_out_frm_struct_type) {
+                VideoFrame_t *videoFrame = (VideoFrame_t *)aDecOut->data;
+                vframe = &videoFrame->vpuFrame;
+                memset(videoFrame, 0, sizeof(VideoFrame_t));
+                aDecOut->size = sizeof(VideoFrame_t);
+                setup_video_frame_meta(videoFrame, mframe);
+            } else {
+                vframe = (VPU_FRAME *)aDecOut->data;
+                memset(vframe, 0, sizeof(VPU_FRAME));
+                aDecOut->size = sizeof(VPU_FRAME);
+            }
 
             setup_VPU_FRAME_from_mpp_frame(vframe, mframe);
 
-            aDecOut->size = sizeof(VPU_FRAME);
             aDecOut->timeUs = mpp_frame_get_pts(mframe);
             frame_count++;
 
@@ -885,7 +932,7 @@ RK_S32 VpuApiLegacy::decode_sendstream(VideoPacket_t *pkt)
     ret = mpi->decode_put_packet(mpp_ctx, mpkt);
     if (ret == MPP_OK) {
         pkt->size = 0;
-    } else {
+    } else if (mInputTimeOutMs == 0) {
         /* reduce cpu overhead here */
         msleep(1);
     }
@@ -900,7 +947,7 @@ RK_S32 VpuApiLegacy::decode_sendstream(VideoPacket_t *pkt)
 RK_S32 VpuApiLegacy::decode_getoutframe(DecoderOut_t *aDecOut)
 {
     RK_S32 ret = 0;
-    VPU_FRAME *vframe = (VPU_FRAME *)aDecOut->data;
+    VPU_FRAME *vframe = NULL;
     MppFrame  mframe = NULL;
 
     vpu_api_dbg_func("enter\n");
@@ -908,8 +955,6 @@ RK_S32 VpuApiLegacy::decode_getoutframe(DecoderOut_t *aDecOut)
     if (!init_ok) {
         return VPU_API_ERR_VPU_CODEC_INIT;
     }
-
-    memset(vframe, 0, sizeof(VPU_FRAME));
 
     if (NULL == mpi) {
         aDecOut->size = 0;
@@ -928,9 +973,20 @@ RK_S32 VpuApiLegacy::decode_getoutframe(DecoderOut_t *aDecOut)
     } else {
         MppBuffer buf = mpp_frame_get_buffer(mframe);
 
+        if (dec_out_frm_struct_type) {
+            VideoFrame_t *videoFrame = (VideoFrame_t *)aDecOut->data;
+            vframe = &videoFrame->vpuFrame;
+            memset(videoFrame, 0, sizeof(VideoFrame_t));
+            aDecOut->size = sizeof(VideoFrame_t);
+            setup_video_frame_meta(videoFrame, mframe);
+        } else {
+            vframe = (VPU_FRAME *)aDecOut->data;
+            memset(vframe, 0, sizeof(VPU_FRAME));
+            aDecOut->size = sizeof(VPU_FRAME);
+        }
+
         setup_VPU_FRAME_from_mpp_frame(vframe, mframe);
 
-        aDecOut->size = sizeof(VPU_FRAME);
         aDecOut->timeUs = mpp_frame_get_pts(mframe);
         frame_count++;
 
@@ -1447,6 +1503,29 @@ RK_S32 VpuApiLegacy::perform(PerformCmd cmd, RK_S32 *data)
     return 0;
 }
 
+static RK_S32 frameReadyCallback(void *ctx, void *mppCtx, RK_S32 cmd, void *mppFrame)
+{
+    (void)mppCtx;
+    (void)cmd;
+    (void)mppFrame;
+    VpuApiLegacy *vpuApi = (VpuApiLegacy *)ctx;
+    RK_S32 ret = 0;
+
+    vpu_api_dbg_func("enter\n");
+
+    if (!vpuApi) {
+        return ret;
+    }
+
+    if (vpuApi->frm_rdy_cb.cb) {
+        ret = vpuApi->frm_rdy_cb.cb(vpuApi->frm_rdy_cb.cbCtx);
+    }
+
+    vpu_api_dbg_func("leave ret %d\n", ret);
+
+    return ret;
+}
+
 RK_S32 VpuApiLegacy::control(VpuCodecContext *ctx, VPU_API_CMD cmd, void *param)
 {
     vpu_api_dbg_func("enter cmd 0x%x param %p\n", cmd, param);
@@ -1517,6 +1596,22 @@ RK_S32 VpuApiLegacy::control(VpuCodecContext *ctx, VPU_API_CMD cmd, void *param)
             }
         }
     } break;
+    case VPU_API_SET_INPUT_BLOCK: {
+        mpicmd = MPP_SET_INPUT_TIMEOUT;
+        if (param) {
+            RK_S32 timeout = *((RK_S32*)param);
+            mInputTimeOutMs = timeout;
+
+            if (timeout) {
+                if (timeout < 0)
+                    mpp_log("set input mode to block\n");
+                else
+                    mpp_log("set input timeout %d ms\n", timeout);
+            } else {
+                mpp_log("set input mode to non-block\n");
+            }
+        }
+    } break;
     case VPU_API_GET_EOS_STATUS: {
         *((RK_S32 *)param) = mEosSet;
         mpicmd = MPI_CMD_BUTT;
@@ -1527,6 +1622,64 @@ RK_S32 VpuApiLegacy::control(VpuCodecContext *ctx, VPU_API_CMD cmd, void *param)
     } break;
     case VPU_API_SET_OUTPUT_MODE: {
         mpicmd = MPP_DEC_SET_OUTPUT_FORMAT;
+    } break;
+    case VPU_API_DEC_EN_FBC_HDR_256_ODD : {
+        MppCompat *compatItem = NULL;
+        compatItem = mpp_compat_query_by_id(MPP_COMPAT_DEC_FBC_HDR_256_ODD);
+        if (compatItem) {
+            mpp_compat_update(compatItem, 1);
+        }
+    } break;
+    case VPU_API_DEC_OUT_FRM_STRUCT_TYPE: {
+        dec_out_frm_struct_type = *((RK_S32 *)param);
+        return 0;
+    } break;
+    case VPU_API_DEC_EN_THUMBNAIL: {
+        RK_S32 ret = 0;
+        MppDecCfg cfg;
+        RK_U32 val = *((RK_U32 *)param);
+        ret = mpp_dec_cfg_init(&cfg);
+        if (ret) {
+            return ret;
+        }
+        ret = mpi->control(mpp_ctx, MPP_DEC_GET_CFG, cfg);
+        mpp_dec_cfg_set_u32(cfg, "base:enable_thumbnail", val);
+        ret = mpi->control(mpp_ctx, MPP_DEC_SET_CFG, cfg);
+        mpp_dec_cfg_deinit(cfg);
+        return ret;
+    } break;
+    case VPU_API_DEC_EN_HDR_META: {
+        RK_S32 ret = 0;
+        MppDecCfg cfg;
+        RK_U32 val = *((RK_U32 *)param);
+        ret = mpp_dec_cfg_init(&cfg);
+        if (ret) {
+            return ret;
+        }
+        ret = mpi->control(mpp_ctx, MPP_DEC_GET_CFG, cfg);
+        mpp_dec_cfg_set_u32(cfg, "base:enable_hdr_meta", val);
+        ret = mpi->control(mpp_ctx, MPP_DEC_SET_CFG, cfg);
+        mpp_dec_cfg_deinit(cfg);
+        return ret;
+    } break;
+    case VPU_API_SET_FRM_RDY_CB: {
+        RK_S32 ret = 0;
+        MppDecCfg cfg;
+        FrameRdyCB *cb = (FrameRdyCB *)param;
+
+        ret = mpp_dec_cfg_init(&cfg);
+        if (ret) {
+            return ret;
+        }
+
+        frm_rdy_cb.cb = cb->cb;
+        frm_rdy_cb.cbCtx = cb->cbCtx;
+        mpp_dec_cfg_set_ptr(cfg, "cb:frm_rdy_cb",
+                            frm_rdy_cb.cb ? (void *)frm_rdy_cb.cb : (void *)frameReadyCallback);
+        mpp_dec_cfg_set_ptr(cfg, "cb:frm_rdy_ctx", frm_rdy_cb.cbCtx);
+        ret = mpi->control(mpp_ctx, MPP_DEC_SET_CFG, cfg);
+        mpp_dec_cfg_deinit(cfg);
+        return ret;
     } break;
     case VPU_API_SET_IMMEDIATE_OUT: {
         mpicmd = MPP_DEC_SET_IMMEDIATE_OUT;
@@ -1632,6 +1785,9 @@ RK_S32 VpuApiLegacy::control(VpuCodecContext *ctx, VPU_API_CMD cmd, void *param)
     } break;
     case VPU_API_SET_PARSER_SPLIT_MODE: {
         mpicmd = MPP_DEC_SET_PARSER_SPLIT_MODE;
+    } break;
+    case VPU_API_DEC_EN_MVC: {
+        mpicmd = MPP_DEC_SET_ENABLE_MVC;
     } break;
     default: {
     } break;

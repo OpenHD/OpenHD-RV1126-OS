@@ -86,7 +86,7 @@ MPP_RET hal_avs2d_init(void *hal, MppHalCfg *cfg)
     RK_U32 hw_id = mpp_get_client_hw_id(VPU_CLIENT_RKVDEC);
 
     p_api          = &p_hal->hal_api;
-    if (hw_id == HWID_VDPU382) {
+    if (hw_id == HWID_VDPU382_RK3528) {
         p_api->init    = hal_avs2d_vdpu382_init;
         p_api->deinit  = hal_avs2d_vdpu382_deinit;
         p_api->reg_gen = hal_avs2d_vdpu382_gen_regs;
@@ -109,13 +109,14 @@ MPP_RET hal_avs2d_init(void *hal, MppHalCfg *cfg)
         mpp_err("mpp_dev_init failed. ret: %d\n", ret);
         return ret;
     }
+    cfg->support_fast_mode = 1;
 
     p_hal->cfg = cfg->cfg;
     p_hal->dev = cfg->dev;
     p_hal->dec_cb = cfg->dec_cb;
     p_hal->frame_slots  = cfg->frame_slots;
     p_hal->packet_slots = cfg->packet_slots;
-    p_hal->fast_mode    = cfg->cfg->base.fast_parse;
+    p_hal->fast_mode    = cfg->cfg->base.fast_parse && cfg->support_fast_mode;
 
     //< get buffer group
     if (p_hal->buf_group == NULL)

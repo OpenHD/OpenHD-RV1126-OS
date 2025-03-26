@@ -500,6 +500,7 @@ static MPP_RET mpg4d_parse_vol_header(Mpg4dParserImpl *p, BitReadCtx_t *cb)
             READ_BITS(cb, 15, &val);
             occupancy |= val;                               /* latter_half_vbv_occupancy */
             SKIP_BITS(cb, 1);
+            mpg4d_dbg_bit("bitrate %d, buffer_size %d, occupancy %d", bitrate, buffer_size, occupancy);
         }
     } else {
         mp4Hdr->vol.low_delay = 0;
@@ -550,6 +551,11 @@ static MPP_RET mpg4d_parse_vol_header(Mpg4dParserImpl *p, BitReadCtx_t *cb)
             SKIP_BITS(cb, 1);
 
             mpg4d_dbg_bit("width %4d height %4d\n", width, height);
+
+            if (width > 1920 || height > 1088) {
+                mpp_err("Warning: unsupport larger than 1920x1088\n");
+                return MPP_NOK;
+            }
 
             mp4Hdr->vol.width  = width;
             mp4Hdr->vol.height = height;

@@ -195,32 +195,24 @@ RK_S32 mpi_enc_opt_vstride(void *ctx, const char *next)
 RK_S32 mpi_enc_opt_f(void *ctx, const char *next)
 {
     MpiEncTestArgs *cmd = (MpiEncTestArgs *)ctx;
-    MppFrameFormat format = MPP_FMT_BUTT;
 
     if (next) {
-        if (strstr(next, "x") || strstr(next, "X")) {
-            /* hex value with 0x prefix, use sscanf */
-            sscanf(next, "0x%x", &format);
-        } else if (strstr(next, "a") || strstr(next, "A") ||
-                   strstr(next, "b") || strstr(next, "B") ||
-                   strstr(next, "c") || strstr(next, "C") ||
-                   strstr(next, "d") || strstr(next, "D") ||
-                   strstr(next, "e") || strstr(next, "E") ||
-                   strstr(next, "f") || strstr(next, "F")) {
-            /* hex value without 0x prefix, use sscanf */
-            sscanf(next, "%x", &format);
-        } else {
-            /* decimal value, use atoi */
-            format = (MppFrameFormat)atoi(next);
-        }
-        if (MPP_FRAME_FMT_IS_BE(format) &&
-            (MPP_FRAME_FMT_IS_YUV(format) || MPP_FRAME_FMT_IS_RGB(format))) {
-            cmd->format = format;
-            return 1;
+        long number = 0;
+        MppFrameFormat format = MPP_FMT_BUTT;
+
+        if (MPP_OK == str_to_frm_fmt(next, &number)) {
+            format = (MppFrameFormat)number;
+
+            if (MPP_FRAME_FMT_IS_BE(format) &&
+                (MPP_FRAME_FMT_IS_YUV(format) || MPP_FRAME_FMT_IS_RGB(format))) {
+                cmd->format = format;
+                return 1;
+            }
+
+            mpp_err("invalid input format 0x%x\n", format);
         }
     }
 
-    mpp_err("invalid input format %x\n", format);
     cmd->format = MPP_FMT_YUV420SP;
     return 0;
 }
@@ -354,9 +346,9 @@ RK_S32 mpi_enc_opt_fps(void *ctx, const char *next)
         } break;
         default : {
             mpp_err("invalid in/out frame rate,"
-                    " use \"-r numerator:denominator:flex\""
+                    " use \"-fps numerator:denominator:flex\""
                     " for set the input to the same fps as the output, such as 50:1:1\n"
-                    " or \"-r numerator:denominator/flex-numerator:denominator:flex\""
+                    " or \"-fps numerator:denominator:flex/numerator:denominator:flex\""
                     " for set input and output separately, such as 40:1:1/30:1:0\n");
         } break;
         }
@@ -380,7 +372,23 @@ RK_S32 mpi_enc_opt_qc(void *ctx, const char *next)
             return 1;
     }
 
-    mpp_err("invalid quality control usage -qc qp_init/min/max/min_i/max_i\n");
+    mpp_err("invalid quality control usage -qc qp_init:min:max:min_i:max_i\n");
+    return 0;
+}
+
+RK_S32 mpi_enc_opt_fqc(void *ctx, const char *next)
+{
+    MpiEncTestArgs *cmd = (MpiEncTestArgs *)ctx;
+    RK_S32 cnt = 0;
+
+    if (next) {
+        cnt = sscanf(next, "%d:%d:%d:%d", &cmd->fqp_min_i, &cmd->fqp_max_i,
+                     &cmd->fqp_min_p, &cmd->fqp_max_p);
+        if (cnt)
+            return 1;
+    }
+
+    mpp_err("invalid frame quality control usage -fqc min_i:max_i:min_p:max_p\n");
     return 0;
 }
 
@@ -466,6 +474,19 @@ RK_S32 mpi_enc_opt_slt(void *ctx, const char *next)
     return 0;
 }
 
+RK_S32 mpi_enc_opt_sm(void *ctx, const char *next)
+{
+    MpiEncTestArgs *cmd = (MpiEncTestArgs *)ctx;
+
+    if (next) {
+        cmd->scene_mode = atoi(next);
+        return 1;
+    }
+
+    mpp_err("invalid scene mode\n");
+    return 0;
+}
+
 RK_S32 mpi_enc_opt_help(void *ctx, const char *next)
 {
     (void)ctx;
@@ -485,15 +506,17 @@ static MppOptInfo enc_opts[] = {
     {"tsrc",    "source type",          "input file source coding type",            mpi_enc_opt_tsrc},
     {"n",       "max frame number",     "max encoding frame number",                mpi_enc_opt_n},
     {"g",       "gop reference mode",   "gop_mode:gop_len:vi_len",                  mpi_enc_opt_g},
-    {"rc",      "rate control mode",    "set rc_mode",                              mpi_enc_opt_rc},
-    {"bps",     "bps target:min:max",   "set tareget/min/max bps and rc_mode",      mpi_enc_opt_bps},
+    {"rc",      "rate control mode",    "set rc_mode, 0:vbr 1:cbr 2:fixqp 3:avbr",  mpi_enc_opt_rc},
+    {"bps",     "bps target:min:max",   "set tareget:min:max bps",                  mpi_enc_opt_bps},
     {"fps",     "in/output fps",        "set input and output frame rate",          mpi_enc_opt_fps},
-    {"qc",      "quality control",      "set qp_init/min/max/min_i/max_i",          mpi_enc_opt_qc},
+    {"qc",      "quality control",      "set qp_init:min:max:min_i:max_i",          mpi_enc_opt_qc},
+    {"fqc",     "frm quality control",  "set fqp min_i:max_i:min_p:max_p",          mpi_enc_opt_fqc},
     {"s",       "instance_nb",          "number of instances",                      mpi_enc_opt_s},
     {"v",       "trace option",         "q - quiet f - show fps",                   mpi_enc_opt_v},
     {"l",       "loop count",           "loop encoding times for each frame",       mpi_enc_opt_l},
     {"ini",     "ini file",             "encoder extra ini config file",            mpi_enc_opt_ini},
     {"slt",     "slt file",             "slt verify data file",                     mpi_enc_opt_slt},
+    {"sm",      "scene mode",           "scene_mode, 0:default 1:ipc",              mpi_enc_opt_sm},
 };
 
 static RK_U32 enc_opt_cnt = MPP_ARRAY_ELEMS(enc_opts);
@@ -562,9 +585,11 @@ MPP_RET mpi_enc_test_cmd_update_by_args(MpiEncTestArgs* cmd, int argc, char **ar
     if ((argc < 2) || NULL == cmd || NULL == argv)
         goto done;
 
+    cmd->rc_mode = MPP_ENC_RC_MODE_BUTT;
+
     mpp_opt_init(&opts);
     /* should change node count when option increases */
-    mpp_opt_setup(opts, cmd, 67, enc_opt_cnt);
+    mpp_opt_setup(opts, cmd, 71, enc_opt_cnt);
 
     for (i = 0; i < enc_opt_cnt; i++)
         mpp_opt_add(opts, &enc_opts[i]);
@@ -579,6 +604,10 @@ MPP_RET mpi_enc_test_cmd_update_by_args(MpiEncTestArgs* cmd, int argc, char **ar
         mpp_err("invalid type %d\n", cmd->type);
         ret = MPP_NOK;
     }
+
+    if (cmd->rc_mode == MPP_ENC_RC_MODE_BUTT)
+        cmd->rc_mode = (cmd->type == MPP_VIDEO_CodingMJPEG) ?
+                       MPP_ENC_RC_MODE_FIXQP : MPP_ENC_RC_MODE_VBR;
 
     if (!cmd->hor_stride)
         cmd->hor_stride = mpi_enc_width_default_stride(cmd->width, cmd->format);
@@ -855,7 +884,7 @@ MPP_RET mpi_enc_gen_smart_gop_ref_cfg(MppEncRefCfg ref, RK_S32 gop_len, RK_S32 v
     /* st 1 layer 1 - non-ref */
     if (vi_len > 1) {
         st_ref[pos].is_non_ref  = 0;
-        st_ref[pos].temporal_id = 1;
+        st_ref[pos].temporal_id = 0;
         st_ref[pos].ref_mode    = REF_TO_PREV_REF_FRM;
         st_ref[pos].ref_arg     = 0;
         st_ref[pos].repeat      = vi_len - 2;

@@ -167,12 +167,12 @@ static MPP_RET jpege_proc_prep_cfg(MppEncPrepCfg *dst, MppEncPrepCfg *src)
             dst->ver_stride = src->ver_stride;
         }
 
-        if (dst->width < 16 && dst->width > 8192) {
+        if (dst->width < 16 || dst->width > 8192) {
             mpp_err_f("invalid width %d is not in range [16..8192]\n", dst->width);
             ret = MPP_NOK;
         }
 
-        if (dst->height < 16 && dst->height > 8192) {
+        if (dst->height < 16 || dst->height > 8192) {
             mpp_err_f("invalid height %d is not in range [16..8192]\n", dst->height);
             ret = MPP_NOK;
         }
@@ -527,6 +527,8 @@ static MPP_RET jpege_proc_hal(void *ctx, HalEncTask *task)
             syntax->part_rows   = part_rows;
             syntax->restart_ri  = syntax->mcu_w * part_rows;
             syntax->low_delay   = cfg->base.low_delay && part_rows;
+            jpege_dbg_func("Split by CTU, part_rows %d, restart_ri %d",
+                           syntax->part_rows, syntax->restart_ri);
         }
     }
 

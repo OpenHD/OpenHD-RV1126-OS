@@ -75,7 +75,6 @@ typedef struct VdpuAv1dRegCtx_t {
     MppBuffer       film_grain_mem;
     MppBuffer       global_model;
     MppBuffer       filter_mem;
-    MppBuffer       buf_tmp;
     MppBuffer       tile_buf;
     filtInfo        filt_info[FILT_TYPE_BUT];
 
@@ -87,25 +86,27 @@ typedef struct VdpuAv1dRegCtx_t {
     MvCDFs          cdfs_last_ndvc[NUM_REF_FRAMES];
     RK_U32          refresh_frame_flags;
 
-    RK_S32          width;
-    RK_S32          height;
+    RK_U32          width;
+    RK_U32          height;
     RK_S32          hor_stride;
     RK_S32          ver_stride;
     RK_U32          luma_size ;
     RK_U32          chroma_size;
 
-    FilmGrainMemory  fgsmem;
+    FilmGrainMemory fgsmem;
 
-    RK_S8            prev_out_buffer_i;
-    RK_U8            fbc_en;
-    RK_U8            resolution_change;
-    RK_U8            tile_transpose;
-    RK_U32           ref_frame_sign_bias[AV1_REF_LIST_SIZE];
+    RK_S8           prev_out_buffer_i;
+    RK_U8           fbc_en;
+    RK_U8           resolution_change;
+    RK_U8           tile_transpose;
+    RK_U32          ref_frame_sign_bias[AV1_REF_LIST_SIZE];
 
     VdpuAv1dRegSet  *regs;
-    HalBufs          tile_out_bufs;
-    RK_U32           tile_out_count;
-    size_t           tile_out_size;
+    HalBufs         tile_out_bufs;
+    RK_U32          tile_out_count;
+    size_t          tile_out_size;
+
+    RK_U32          num_tile_cols;
 } VdpuAv1dRegCtx;
 
 static RK_U32 rkv_ver_align(RK_U32 val)
@@ -225,6 +226,7 @@ static MPP_RET vdpu_av1d_filtermem_alloc(Av1dHalCtx *p_hal, VdpuAv1dRegCtx *ctx,
     // }
     if (!mpp_buffer_get(p_hal->buf_group, &ctx->filter_mem, MPP_ALIGN(size, SZ_4K)))
         return MPP_NOK;
+
     return MPP_OK;
 }
 
@@ -243,7 +245,6 @@ static void hal_av1d_release_res(void *hal)
     BUF_PUT(reg_ctx->tile_info);
     BUF_PUT(reg_ctx->film_grain_mem);
     BUF_PUT(reg_ctx->global_model);
-    BUF_PUT(reg_ctx->buf_tmp);
     BUF_PUT(reg_ctx->tile_buf);
     vdpu_av1d_filtermem_release(reg_ctx);
     hal_bufs_deinit(reg_ctx->tile_out_bufs);
@@ -379,6 +380,7 @@ static void set_ref_lum_base(VdpuAv1dRegSet *regs, RK_S32 i, RK_S32 val, HalBufs
     // mpp_buf_slot_get_prop(slots, val, SLOT_BUFFER, &framebuf);
     if (tile_out_buf == NULL) {
         mpp_err_f("get slots frame buff fail");
+        return;
     }
     val =  mpp_buffer_get_fd(tile_out_buf->buf[0]);
     if (i == 0) {
@@ -432,6 +434,7 @@ static void set_ref_cb_base(Av1dHalCtx *p_hal, RK_S32 i, RK_S32 val, HalBufs buf
     // mpp_buf_slot_get_prop(slots, val, SLOT_BUFFER, &framebuf);
     if (tile_out_buf == NULL) {
         mpp_err_f("get slots frame buff fail");
+        return;
     }
     val =  mpp_buffer_get_fd(tile_out_buf->buf[0]);
 
@@ -494,6 +497,7 @@ static void set_ref_dbase(Av1dHalCtx *p_hal, RK_S32 i, RK_S32 val,  HalBufs bufs
     // mpp_buf_slot_get_prop(slots, val, SLOT_BUFFER, &framebuf);
     if (tile_out_buf == NULL) {
         mpp_err_f("get slots frame buff fail");
+        return;
     }
     val =  mpp_buffer_get_fd(tile_out_buf->buf[0]);
     if (i == 0) {
@@ -747,6 +751,8 @@ void set_frame_sign_bias(Av1dHalCtx *p_hal, DXVA_PicParams_AV1 *dxva)
             RK_S32 ref_frame_offset = dxva->frame_refs[i].order_hint;
             RK_S32 rel_off = GetRelativeDist(dxva, ref_frame_offset, dxva->order_hint);
             reg_ctx->ref_frame_sign_bias[i + 1] = (rel_off <= 0) ? 0 : 1;
+            AV1D_DBG(AV1D_DBG_LOG, "frame_refs[%d] order_hint %d ref_frame_offset %d\n",
+                     i, dxva->order_hint, ref_frame_offset);
         }
     }
 }
@@ -764,6 +770,7 @@ void vdpu_av1d_set_prob(Av1dHalCtx *p_hal, DXVA_PicParams_AV1 *dxva)
         // Overwrite MV context area with intrabc MV context
         memcpy(prob_base + mv_cdf_offset, dxva->cdfs_ndvc, sizeof(MvCDFs));
     }
+    mpp_buffer_sync_end(reg_ctx->prob_tbl_base);
 
     regs->addr_cfg.swreg171.sw_prob_tab_out_base_lsb    = mpp_buffer_get_fd(reg_ctx->prob_tbl_out_base);
     regs->addr_cfg.swreg173.sw_prob_tab_base_lsb        = mpp_buffer_get_fd(reg_ctx->prob_tbl_base);
@@ -1038,14 +1045,17 @@ void vdpu_av1d_set_reference_frames(Av1dHalCtx *p_hal, VdpuAv1dRegCtx *ctx, DXVA
             dxva->primary_ref_frame < ALLOWED_REFS_PER_FRAME_EX) {
             // Primary ref frame is zero based
             RK_S32 prim_buf_idx = dxva->frame_refs[dxva->primary_ref_frame].Index;
+
             if (prim_buf_idx >= 0) {
-                MppBuffer buffer = NULL;
+                HalBuf *tile_out_buf;
+
                 y_stride = ctx->luma_size ;
                 uv_stride = y_stride / 2;
                 mv_offset = y_stride + uv_stride + 64;
-                mpp_buf_slot_get_prop(p_hal->slots, dxva->RefFrameMapTextureIndex[dxva->primary_ref_frame], SLOT_BUFFER, &buffer);
+
+                tile_out_buf = hal_bufs_get_buf(ctx->tile_out_bufs, prim_buf_idx);
                 regs->addr_cfg.swreg80.sw_segment_read_base_msb = 0;
-                regs->addr_cfg.swreg81.sw_segment_read_base_lsb = mpp_buffer_get_fd(buffer);
+                regs->addr_cfg.swreg81.sw_segment_read_base_lsb = mpp_buffer_get_fd(tile_out_buf->buf[0]);
                 mpp_dev_set_reg_offset(p_hal->dev, 81, mv_offset);
                 regs->swreg11.sw_use_temporal3_mvs = 1;
             }
@@ -1423,6 +1433,7 @@ void vdpu_av1d_set_global_model(Av1dHalCtx *p_hal, DXVA_PicParams_AV1 *dxva)
     VdpuAv1dRegSet *regs = ctx->regs;
     RK_U8 *dst = (RK_U8 *) mpp_buffer_get_ptr(ctx->global_model);
     RK_S32 ref_frame, i;
+
     for (ref_frame = 0; ref_frame < GM_GLOBAL_MODELS_PER_FRAME; ++ref_frame) {
         mpp_assert(dxva->frame_refs[ref_frame].wmtype <= 3);
 
@@ -1445,7 +1456,14 @@ void vdpu_av1d_set_global_model(Av1dHalCtx *p_hal, DXVA_PicParams_AV1 *dxva)
         dst += 2;
         *(RK_S16 *)(dst) = dxva->frame_refs[ref_frame].delta;//-32768;
         dst += 2;
+        AV1D_DBG(AV1D_DBG_LOG, "ref_frame[%d] alpa %d beta %d gamma %d delta %d\n",
+                 ref_frame,
+                 dxva->frame_refs[ref_frame].alpha,
+                 dxva->frame_refs[ref_frame].beta,
+                 dxva->frame_refs[ref_frame].gamma,
+                 dxva->frame_refs[ref_frame].delta);
     }
+    mpp_buffer_sync_end(ctx->global_model);
 
     regs->addr_cfg.swreg82.sw_global_model_base_msb = 0;
     regs->addr_cfg.swreg83.sw_global_model_base_lsb = mpp_buffer_get_fd(ctx->global_model);
@@ -1568,6 +1586,7 @@ void vdpu_av1d_set_tile_info_mem(Av1dHalCtx *p_hal, DXVA_PicParams_AV1 *dxva)
                      tile0, tile1, start, end, x0, x1, y0, y1);
         }
     }
+    mpp_buffer_sync_end(ctx->tile_info);
 }
 
 void vdpu_av1d_set_cdef(Av1dHalCtx *p_hal, DXVA_PicParams_AV1 *dxva)
@@ -1770,6 +1789,7 @@ void vdpu_av1d_set_fgs(VdpuAv1dRegCtx *ctx, DXVA_PicParams_AV1 *dxva)
     }
 
     memcpy(ptr, &ctx->fgsmem, sizeof(FilmGrainMemory));
+    mpp_buffer_sync_end(ctx->film_grain_mem);
 
     regs->addr_cfg.swreg94.sw_filmgrain_base_msb = 0;
     regs->addr_cfg.swreg95.sw_filmgrain_base_lsb = mpp_buffer_get_fd(ctx->film_grain_mem);
@@ -1792,15 +1812,16 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
     RK_U32 hor_stride;
     RK_U32 ver_stride;
     HalBuf *tile_out_buf;
-    // RK_U32 bit_depth = dxva->bitdepth;
-    ctx->width = width;
-    ctx->height = height;
+    RK_U32 num_tile_cols = 1 << dxva->tile_cols_log2;
+
     INP_CHECK(ret, NULL == p_hal);
 
     ctx->refresh_frame_flags = dxva->refresh_frame_flags;
 
     if (task->dec.flags.parse_err ||
         task->dec.flags.ref_err) {
+        mpp_err_f("parse err %d ref err %d\n",
+                  task->dec.flags.parse_err, task->dec.flags.ref_err);
         goto __RETURN;
     }
 
@@ -1821,10 +1842,10 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
     memset(regs, 0, sizeof(*regs));
 
     if (!ctx->tile_out_bufs) {
-        RK_U32 out_w = MPP_ALIGN(width * dxva->bitdepth, 16 * 8) / 8;
-        RK_U32 num_sbs = ((width + 63) / 64 + 1) * ((height + 63) / 64  + 1);
-        RK_U32 dir_mvs_size = MPP_ALIGN(num_sbs * 24 * 128 / 8, 16);
-        RK_U32 out_h = MPP_ALIGN(height, 16);
+        RK_U32 out_w = MPP_ALIGN(dxva->max_width * dxva->bitdepth, 16 * 8) / 8;
+        RK_U32 num_sbs = ((dxva->max_width + 63) / 64 + 1) * ((dxva->max_height + 63) / 64  + 1);
+        RK_U32 dir_mvs_size = MPP_ALIGN(num_sbs * 24 * 128 / 8, 16) * 2;
+        RK_U32 out_h = MPP_ALIGN(dxva->max_height, 16);
         RK_U32 luma_size = out_w * out_h;
         RK_U32 chroma_size = luma_size / 2;
 
@@ -1846,19 +1867,19 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
         hal_bufs_setup(ctx->tile_out_bufs, ctx->tile_out_count, 1, &ctx->tile_out_size);
     }
 
-    if (!ctx->filter_mem) {
+    if (!ctx->filter_mem || height > ctx->height || num_tile_cols > ctx->num_tile_cols) {
+        if (ctx->filter_mem)
+            vdpu_av1d_filtermem_release(ctx);
         ret = vdpu_av1d_filtermem_alloc(p_hal, ctx, dxva);
         if (!ret) {
             mpp_err("filt buffer get fail\n");
             vdpu_av1d_filtermem_release(ctx);
         }
     }
-    if (!ctx->buf_tmp) {
-        RK_U32 size = height * width * 2;
 
-        mpp_buffer_get(p_hal->buf_group, &ctx->buf_tmp, size);
-    }
-
+    ctx->width = width;
+    ctx->height = height;
+    ctx->num_tile_cols = num_tile_cols;
     mpp_buf_slot_get_prop(p_hal->slots, task->dec.output, SLOT_FRAME_PTR, &mframe);
     mpp_buf_slot_get_prop(p_hal ->slots, task->dec.output, SLOT_BUFFER, &buffer);
     mpp_buf_slot_get_prop(p_hal ->packet_slots, task->dec.input, SLOT_BUFFER, &streambuf);
@@ -1958,13 +1979,12 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
         fflush(fp);
         fclose(fp);
 
-        data = mpp_buffer_get_ptr(streambuf);// + (dxva->frame_tag_size & (~0xf));
-        size = MPP_ALIGN(p_hal->strm_len, 128);//mpp_buffer_get_size(streambuf);
+        data = mpp_buffer_get_ptr(streambuf);
+        size = MPP_ALIGN(p_hal->strm_len, 1);
         memset(name, 0, sizeof(name));
         sprintf(name, "%s/stream_%d.txt", path, g_frame_num);
         fp = fopen(name, "wb");
-        for ( i = 0; i < size / 4; i++)
-            fprintf(fp, "%08x\n", data[i]);
+        fwrite((RK_U8*)data, 1, size, fp);
         fflush(fp);
         fclose(fp);
 
@@ -2137,17 +2157,11 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
             vir_right = 16 - ((vir_left + width) % 16);
         else
             vir_right = 0;
-        if (!bypass_filter) {
-            if (16 - (56 % 16))
-                vir_top = 16 - (56 % 16);
-            else
-                vir_top = 0;
-        } else {
-            if (((64 - (height % 64))) % 16)
-                vir_top = 16 - (((64 - (height % 64))) % 16);
-            else
-                vir_top = 0;
-        }
+
+        if (!bypass_filter)
+            vir_top = 8;
+        else
+            vir_top = 0;
 
         if (((vir_top + height) % 16))
             vir_bottom = 16 - ((vir_top + height) % 16);
@@ -2160,7 +2174,7 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
         regs->vdpu_av1d_pp_cfg.swreg503.sw_pp0_virtual_right = vir_right;
         mpp_frame_set_offset_y(mframe, vir_top);
         mpp_frame_set_ver_stride(mframe, vir_top + height + vir_bottom);
-        regs->vdpu_av1d_pp_cfg.swreg322.sw_pp_out_format = 3;
+        regs->vdpu_av1d_pp_cfg.swreg322.sw_pp_out_format = 0;
         regs->vdpu_av1d_pp_cfg.swreg326.sw_pp_out_lu_base_lsb = mpp_buffer_get_fd(buffer);
         regs->vdpu_av1d_pp_cfg.swreg328.sw_pp_out_ch_base_lsb = mpp_buffer_get_fd(buffer);
         regs->vdpu_av1d_pp_cfg.swreg505.sw_pp0_afbc_tile_base_lsb = mpp_buffer_get_fd(buffer);
@@ -2168,16 +2182,21 @@ MPP_RET vdpu_av1d_gen_regs(void *hal, HalTaskInfo *task)
         RK_U32 out_w = hor_stride;
         RK_U32 out_h = ver_stride;
         RK_U32 y_stride = out_w * out_h;
-        regs->vdpu_av1d_pp_cfg.swreg322.sw_pp_out_format = 0;
+        RK_U32 out_fmt = 0;
+
+        if (mpp_frame_get_fmt(mframe) == MPP_FMT_YUV420SP)
+            out_fmt = 3;
+
+        /*
+         * out_fmt:
+         * 0 is 8bit or 10bit output by syntax
+         * 3 is force 8bit output
+         */
+        regs->vdpu_av1d_pp_cfg.swreg322.sw_pp_out_format = out_fmt;
         regs->vdpu_av1d_pp_cfg.swreg326.sw_pp_out_lu_base_lsb = mpp_buffer_get_fd(buffer);
         regs->vdpu_av1d_pp_cfg.swreg328.sw_pp_out_ch_base_lsb = mpp_buffer_get_fd(buffer);
         mpp_dev_set_reg_offset(p_hal->dev, 328, y_stride);
     }
-
-    /* RK_U32 i = 0;
-    for (i = 0; i < sizeof(VdpuAv1dRegSet) / sizeof(RK_U32); i++)
-        mpp_log("regs[%04d]=%08X\n", i, ((RK_U32 *)regs)[i]); */
-
 
 __RETURN:
     return ret = MPP_OK;
@@ -2208,11 +2227,9 @@ MPP_RET vdpu_av1d_start(void *hal, HalTaskInfo *task)
 
         sprintf(fname, "/data/video/reg_%d_in.txt", g_frame_no++);
         fp_in = fopen(fname, "wb");
-        for (i = 0; i < sizeof(*regs) / 4; i ++ ) {
+        for (i = 0; i < sizeof(*regs) / 4; i++, p++)
             fprintf(fp_in, "reg[%3d] = %08x\n", i, *p);
-            AV1D_LOG("reg[%3d] = %08x", i, *p);
-            p++;
-        }
+
         fflush(fp_in);
         fclose(fp_in);
     }
@@ -2280,11 +2297,9 @@ MPP_RET vdpu_av1d_wait(void *hal, HalTaskInfo *task)
 
         sprintf(fname, "/data/video/reg_%d_out.txt", g_frame_no++);
         fp_in = fopen(fname, "wb");
-        for (i = 0; i < sizeof(*p_regs) / 4; i ++ ) {
+        for (i = 0; i < sizeof(*p_regs) / 4; i++, p++)
             fprintf(fp_in, "reg[%3d] = %08x\n", i, *p);
-            AV1D_LOG("reg[%3d] = %08x", i, *p);
-            p++;
-        }
+
         fflush(fp_in);
         fclose(fp_in);
     }
@@ -2295,6 +2310,7 @@ __SKIP_HARD:
         DecCbHalDone m_ctx;
         RK_U32 *prob_out = (RK_U32*)mpp_buffer_get_ptr(reg_ctx->prob_tbl_out_base);
 
+        mpp_buffer_sync_ro_begin(reg_ctx->prob_tbl_out_base);
         m_ctx.task = mpp_buffer_get_ptr(reg_ctx->prob_tbl_out_base);//(void *)&task->dec;
         m_ctx.regs = (RK_U32 *)prob_out;
         if (!p_regs->swreg1.sw_dec_rdy_int/* decode err */)

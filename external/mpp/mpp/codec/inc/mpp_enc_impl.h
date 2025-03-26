@@ -26,6 +26,8 @@
 #include "rc.h"
 #include "hal_info.h"
 
+#define HDR_ADDED_MASK  0xe
+
 typedef union MppEncHeaderStatus_u {
     RK_U32 val;
     struct {
@@ -101,6 +103,7 @@ typedef struct MppEncImpl_t {
     RK_U32              work_count;
     RK_U32              status_flag;
     RK_U32              notify_flag;
+    RK_U32              enc_failed_drop;
 
     /* control process */
     RK_U32              cmd_send;

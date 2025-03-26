@@ -23,6 +23,7 @@
 #include "h264d_global.h"
 #include "h264d_sps.h"
 #include "h264d_sei.h"
+#include "h2645d_sei.h"
 
 static MPP_RET interpret_picture_timing_info(
     BitReadCtx_t *p_bitctx,
@@ -37,7 +38,7 @@ static MPP_RET interpret_picture_timing_info(
     H264_SEI_PIC_TIMING_t *pic_timing = NULL;
     RK_U32 num_clock_ts[9] = {1, 1, 1, 2, 2, 3, 3, 2, 3};
     struct h264_vui_t *vui_seq_parameters = NULL;
-    RK_S32 seq_parameter_set_id = sei_msg->seq_parameter_set_id;
+    RK_U32 seq_parameter_set_id = sei_msg->seq_parameter_set_id;
 
     if (seq_parameter_set_id >= MAXSPS || !p_videoctx->spsSet[seq_parameter_set_id]) {
         H264D_ERR("seq_parameter_set_id %d may be invalid\n", seq_parameter_set_id);
@@ -162,7 +163,7 @@ static MPP_RET interpret_buffering_period_info(
 {
     MPP_RET ret = MPP_ERR_UNKNOW;
     RK_U32 i = 0;
-    RK_S32 seq_parameter_set_id = sei_msg->seq_parameter_set_id;
+    RK_U32 seq_parameter_set_id = sei_msg->seq_parameter_set_id;
     struct h264_vui_t *vui_seq_parameters = NULL;
 
     READ_UE(p_bitctx, &seq_parameter_set_id);
@@ -176,7 +177,7 @@ static MPP_RET interpret_buffering_period_info(
     vui_seq_parameters = &(p_videoctx->spsSet[sei_msg->seq_parameter_set_id]->vui_seq_parameters);
 
     if (vui_seq_parameters->nal_hrd_parameters_present_flag) {
-        for (i = 0; i <= vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
+        for (i = 0; i < vui_seq_parameters->nal_hrd_parameters.cpb_cnt_minus1; i++) {
             SKIP_BITS(p_bitctx,
                       vui_seq_parameters->nal_hrd_parameters.initial_cpb_removal_delay_length_minus1); //initial_cpb_removal_delay
             SKIP_BITS(p_bitctx,
@@ -185,7 +186,7 @@ static MPP_RET interpret_buffering_period_info(
     }
 
     if (vui_seq_parameters->vcl_hrd_parameters_present_flag) {
-        for (i = 0; i <= vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
+        for (i = 0; i < vui_seq_parameters->vcl_hrd_parameters.cpb_cnt_minus1; i++) {
             SKIP_BITS(p_bitctx,
                       vui_seq_parameters->vcl_hrd_parameters.initial_cpb_removal_delay_length_minus1); //initial_cpb_removal_delay
             SKIP_BITS(p_bitctx,
@@ -200,67 +201,28 @@ __BITREAD_ERR:
 
 }
 
-static MPP_RET interpret_reserved_info(RK_S32 size, BitReadCtx_t *p_bitctx, H264_SEI_t *sei_msg)
+static MPP_RET interpret_recovery_point(BitReadCtx_t *p_bitctx, H264dVideoCtx_t *p_videoctx)
 {
-    RK_U8 payload_byte = 0;
-    RK_S32 i = 0;
+    RK_S32 recovery_frame_cnt = 0;
 
-    for (i = 0; i < size; i++) {
-        SKIP_BITS(p_bitctx, 8);
+    READ_UE(p_bitctx, &recovery_frame_cnt);
+
+    if (recovery_frame_cnt >= (1 << 16) || recovery_frame_cnt < 0) {
+        H264D_DBG(H264D_DBG_SEI, "recovery_frame_cnt %d, is out of range %d",
+                  recovery_frame_cnt, p_videoctx->max_frame_num);
+        return MPP_ERR_STREAM;
     }
-    (void)p_bitctx;
-    (void)sei_msg;
-    (void)payload_byte;
+
+    memset(&p_videoctx->recovery, 0, sizeof(RecoveryPoint));
+
+    p_videoctx->recovery.valid_flag = 1;
+    p_videoctx->recovery.recovery_frame_cnt = recovery_frame_cnt;
+    H264D_DBG(H264D_DBG_SEI, "Recovery point: frame_cnt %d", p_videoctx->recovery.recovery_frame_cnt);
+    return MPP_OK;
 __BITREAD_ERR:
     return p_bitctx->ret;
 }
 
-static MPP_RET parserSEI(H264_SLICE_t *cur_slice, BitReadCtx_t *p_bitctx, H264_SEI_t *sei_msg, RK_U8 *msg)
-{
-    (void)msg;
-
-    MPP_RET ret = MPP_ERR_UNKNOW;
-    H264dVideoCtx_t  *p_Vid = cur_slice->p_Vid;
-
-#if 0
-    H264_SPS_t *sps = NULL;
-    H264_subSPS_t *subset_sps = NULL;
-
-    if (sei_msg->mvc_scalable_nesting_flag) {
-        p_Vid->active_mvc_sps_flag = 1;
-        sps = NULL;
-        subset_sps = &p_Vid->subspsSet[sei_msg->seq_parameter_set_id];
-    } else {
-        p_Vid->active_mvc_sps_flag = 0;
-        sps = &p_Vid->spsSet[sei_msg->seq_parameter_set_id];
-        subset_sps = NULL;
-    }
-    p_Vid->exit_picture_flag = 1;
-    FUN_CHECK(ret = activate_sps(p_Vid, sps, subset_sps));
-#endif
-
-    H264D_DBG(H264D_DBG_SEI, "[SEI_info] type=%d size: %d\n", sei_msg->type, sei_msg->payload_size);
-    switch (sei_msg->type) {
-    case H264_SEI_BUFFERING_PERIOD: {
-        FUN_CHECK(ret = interpret_buffering_period_info(p_bitctx, sei_msg, p_Vid));
-    }
-    break;
-    case H264_SEI_PIC_TIMING: {
-        FUN_CHECK(interpret_picture_timing_info(p_bitctx, sei_msg, p_Vid));
-    }
-    break;
-    case H264_SEI_USER_DATA_UNREGISTERED:
-        break;
-    default: {
-        interpret_reserved_info(sei_msg->payload_size, p_bitctx, sei_msg);
-    }
-    break;
-    }
-
-    return ret = MPP_OK;
-__FAILED:
-    return ret;
-}
 /*!
 ***********************************************************************
 * \brief
@@ -274,7 +236,8 @@ MPP_RET process_sei(H264_SLICE_t *currSlice)
     MPP_RET ret = MPP_ERR_UNKNOW;
     H264_SEI_t *sei_msg  = NULL;
     BitReadCtx_t *p_bitctx = &currSlice->p_Cur->bitctx;
-    RK_U32 next;
+    BitReadCtx_t payload_bitctx;
+    RK_S32 i = 0;
 
     if (!currSlice->p_Cur->sei)
         currSlice->p_Cur->sei = mpp_calloc(H264_SEI_t, 1);
@@ -297,16 +260,39 @@ MPP_RET process_sei(H264_SLICE_t *currSlice)
             sei_msg->payload_size += tmp_byte;
         }
 
-        next = p_bitctx->used_bits + 8 * sei_msg->payload_size;
-        //--- read sei info
-        FUN_CHECK(ret = parserSEI(currSlice, p_bitctx, sei_msg, p_bitctx->data_));
-        //--- set offset to read next sei nal
-        if (H264_SEI_MVC_SCALABLE_NESTING == sei_msg->type) {
-            sei_msg->payload_size = ((p_bitctx->used_bits + 0x07) >> 3);
+        H264D_DBG(H264D_DBG_SEI, "SEI type %d, payload size: %d\n", sei_msg->type, sei_msg->payload_size);
+
+        memset(&payload_bitctx, 0, sizeof(payload_bitctx));
+        mpp_set_bitread_ctx(&payload_bitctx, p_bitctx->data_, sei_msg->payload_size);
+        mpp_set_bitread_pseudo_code_type(&payload_bitctx, PSEUDO_CODE_H264_H265_SEI);
+
+        switch (sei_msg->type) {
+        case H264_SEI_BUFFERING_PERIOD:
+            FUN_CHECK(ret = interpret_buffering_period_info(&payload_bitctx, sei_msg, currSlice->p_Vid));
+            break;
+        case H264_SEI_PIC_TIMING:
+            FUN_CHECK(interpret_picture_timing_info(&payload_bitctx, sei_msg, currSlice->p_Vid));
+            break;
+        case H264_SEI_USER_DATA_UNREGISTERED:
+            FUN_CHECK(check_encoder_sei_info(&payload_bitctx, sei_msg->payload_size, &currSlice->p_Vid->deny_flag));
+
+            if (currSlice->p_Vid->deny_flag)
+                H264D_DBG(H264D_DBG_SEI, "Bitstream is encoded by special encoder.");
+            break;
+        case H264_SEI_RECOVERY_POINT:
+            FUN_CHECK(interpret_recovery_point(&payload_bitctx, currSlice->p_Vid));
+            break;
+        default:
+            H264D_DBG(H264D_DBG_SEI, "Skip parsing SEI type %d\n", sei_msg->type);
+            break;
         }
 
-        SKIP_BITS(p_bitctx, next - p_bitctx->used_bits);
+        H264D_DBG(H264D_DBG_SEI, "After parsing SEI %d, bits left int cur byte %d, bits_used %d, bytes left %d",
+                  sei_msg->type, payload_bitctx.num_remaining_bits_in_curr_byte_, payload_bitctx.used_bits,
+                  payload_bitctx.bytes_left_);
 
+        for (i = 0; i < sei_msg->payload_size; i++)
+            SKIP_BITS(p_bitctx, 8);
     } while (mpp_has_more_rbsp_data(p_bitctx));    // more_rbsp_data()  msg[offset] != 0x80
 
     return ret = MPP_OK;

@@ -1,56 +1,47 @@
-################################################################################
-#
-# rockchip-mpp
-#
-################################################################################
+# Rockchip's MPP(Multimedia Processing Platform)
+MPP_SITE = $(TOPDIR)/../external/mpp
+MPP_VERSION = release
+MPP_SITE_METHOD = local
 
-ROCKCHIP_MPP_SITE = $(TOPDIR)/../external/mpp
-ROCKCHIP_MPP_VERSION = develop
-ROCKCHIP_MPP_SITE_METHOD = local
+MPP_CONF_OPTS = "-DRKPLATFORM=ON"
+MPP_CONF_DEPENDENCIES += libdrm
 
-ROCKCHIP_MPP_LICENSE = Apache-2.0
-ROCKCHIP_MPP_LICENSE_FILES = LICENSE.md
+MPP_INSTALL_STAGING = YES
 
-ROCKCHIP_MPP_CONF_OPTS = "-DRKPLATFORM=ON"
-ROCKCHIP_MPP_DEPENDENCIES += libdrm
-
-ROCKCHIP_MPP_INSTALL_STAGING = YES
-
-ifeq ($(BR2_PACKAGE_ROCKCHIP_MPP_ALLOCATOR_DRM),y)
-ROCKCHIP_MPP_CONF_OPTS += "-DHAVE_DRM=ON"
+ifeq ($(BR2_PACKAGE_MPP_ALLOCATOR_DRM),y)
+MPP_CONF_OPTS += "-DHAVE_DRM=ON"
 endif
 
-ifeq ($(BR2_PACKAGE_ROCKCHIP_MPP_TESTS),y)
-ROCKCHIP_MPP_CONF_OPTS += "-DBUILD_TEST=ON"
+ifeq ($(BR2_PACKAGE_MPP_TESTS),y)
+MPP_CONF_OPTS += "-DBUILD_TEST=ON"
 endif
 
-define ROCKCHIP_MPP_LINK_GIT
+define MPP_LINK_GIT
 	rm -rf $(@D)/.git
 	ln -s $(SRCDIR)/.git $(@D)/
 endef
-ROCKCHIP_MPP_POST_RSYNC_HOOKS += ROCKCHIP_MPP_LINK_GIT
+
+MPP_POST_RSYNC_HOOKS += MPP_LINK_GIT
 
 ifeq ($(BR2_PACKAGE_RK3328),y)
-define ROCKCHIP_MPP_H265_SUPPORTED_FIRMWARE
+define MPP_H265_SUPPORTED_FIRMWARE
 	mkdir -p $(TARGET_DIR)/lib/firmware/
 
-	if test -e $(ROCKCHIP_MPP_SITE)/../rktoolkit/monet.bin ; then \
-		$(INSTALL) -m 0644 -D $(ROCKCHIP_MPP_SITE)/../rktoolkit/monet.bin \
+	if test -e $(MPP_SITE)/../rktoolkit/monet.bin ; then \
+		$(INSTALL) -m 0644 -D $(MPP_SITE)/../rktoolkit/monet.bin \
 			$(TARGET_DIR)/lib/firmware/ ; \
 	else \
-		$(INSTALL) -m 0644 -D package/rockchip/rockchip-mpp/monet.bin \
+		$(INSTALL) -m 0644 -D package/rockchip/mpp/monet.bin \
 			$(TARGET_DIR)/lib/firmware/ ; \
 	fi
 endef
-ROCKCHIP_MPP_POST_INSTALL_TARGET_HOOKS += ROCKCHIP_MPP_H265_SUPPORTED_FIRMWARE
+MPP_POST_INSTALL_TARGET_HOOKS += MPP_H265_SUPPORTED_FIRMWARE
 endif
 
-define ROCKCHIP_MPP_REMOVE_NOISY_LOGS
-	sed -i -e "/pp_enable %d/d" \
-		$(@D)/mpp/hal/vpu/jpegd/hal_jpegd_vdpu2.c || true
-	sed -i -e "/reg size mismatch wr/i    if (0)" \
-		$(@D)/osal/driver/vcodec_service.c || true
-endef
-ROCKCHIP_MPP_POST_RSYNC_HOOKS += ROCKCHIP_MPP_REMOVE_NOISY_LOGS
+ifeq ($(BR2_PACKAGE_RK_OEM), y)
+ifneq ($(BR2_PACKAGE_THUNDERBOOT), y)
+MPP_INSTALL_TARGET_OPTS = DESTDIR=$(BR2_PACKAGE_RK_OEM_INSTALL_TARGET_DIR) install/fast
+endif
+endif
 
 $(eval $(cmake-package))

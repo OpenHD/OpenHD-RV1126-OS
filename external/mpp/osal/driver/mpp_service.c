@@ -40,8 +40,8 @@ typedef struct MppServiceQueryCfg_t {
 static const MppServiceQueryCfg query_cfg[] = {
     {   MPP_CMD_QUERY_BASE,     "query_cmd",    },
     {   MPP_CMD_INIT_BASE,      "init_cmd",     },
-    {   MPP_CMD_SEND_BASE,      "query_cmd",    },
-    {   MPP_CMD_POLL_BASE,      "init_cmd",     },
+    {   MPP_CMD_SEND_BASE,      "send_cmd",     },
+    {   MPP_CMD_POLL_BASE,      "poll_cmd",     },
     {   MPP_CMD_CONTROL_BASE,   "control_cmd",  },
 };
 
@@ -281,8 +281,10 @@ MPP_RET mpp_service_init(void *ctx, MppClientType type)
     mpp_assert(p->cap);
     if (MPP_OK == mpp_service_check_cmd_valid(MPP_CMD_SEND_CODEC_INFO, p->cap))
         p->support_set_info = 1;
-    if (MPP_OK == mpp_service_check_cmd_valid(MPP_CMD_SET_RCB_INFO, p->cap))
+    if (MPP_OK == mpp_service_check_cmd_valid(MPP_CMD_SET_RCB_INFO, p->cap)) {
         p->support_set_rcb_info = 1;
+        mpp_env_get_u32("disable_rcb_info", &p->support_set_rcb_info, 1);
+    }
     if (MPP_OK == mpp_service_check_cmd_valid(MPP_CMD_POLL_HW_IRQ, p->cap))
         p->support_hw_irq = 1;
 
@@ -523,11 +525,6 @@ MPP_RET mpp_service_reg_offsets(void *ctx, MppDevRegOffCfgs *cfgs)
 MPP_RET mpp_service_rcb_info(void *ctx, MppDevRcbInfoCfg *cfg)
 {
     MppDevMppService *p = (MppDevMppService *)ctx;
-    RK_U32 rcb_info_disable = 0;
-
-    mpp_env_get_u32("disable_rcb_info", &rcb_info_disable, 0);
-    if (rcb_info_disable)
-        return MPP_OK;
 
     if (!p->support_set_rcb_info)
         return MPP_OK;
@@ -559,6 +556,20 @@ MPP_RET mpp_service_set_info(void *ctx, MppDevInfoCfg *cfg)
     p->info_count++;
 
     return MPP_OK;
+}
+
+MPP_RET mpp_service_set_err_ref_hack(void *ctx, RK_U32 *enable)
+{
+    MppDevMppService *p = (MppDevMppService *)ctx;
+    MppReqV1 mpp_req;
+
+    mpp_req.cmd = MPP_CMD_SET_ERR_REF_HACK;
+    mpp_req.flag = MPP_FLAGS_LAST_MSG;
+    mpp_req.size = sizeof(RK_U32);
+    mpp_req.offset = 0;
+    mpp_req.data_ptr = REQ_DATA_PTR(enable);
+
+    return mpp_service_ioctl_request(p->client, &mpp_req);
 }
 
 MPP_RET mpp_service_cmd_send(void *ctx)
@@ -702,6 +713,7 @@ const MppDevApi mpp_service_api = {
     mpp_service_reg_offsets,
     mpp_service_rcb_info,
     mpp_service_set_info,
+    mpp_service_set_err_ref_hack,
     mpp_service_cmd_send,
     mpp_service_cmd_poll,
 };

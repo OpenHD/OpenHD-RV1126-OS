@@ -58,6 +58,7 @@
 #define CAP_CODING_VDPU341      (HAVE_AVC|HAVE_HEVC|HAVE_VP9)
 #define CAP_CODING_VDPU341_LITE (HAVE_AVC|HAVE_HEVC)
 #define CAP_CODING_VDPU381      (HAVE_AVC|HAVE_HEVC|HAVE_VP9|HAVE_AVS2)
+#define CAP_CODING_VDPU382      (HAVE_AVC|HAVE_HEVC|HAVE_AVS2)
 
 #define CAP_CODING_VEPU1        (HAVE_AVC|HAVE_MJPEG|HAVE_VP8)
 #define CAP_CODING_VEPU_LITE    (HAVE_AVC|HAVE_MJPEG)
@@ -71,7 +72,7 @@ static const MppDecHwCap vdpu1 = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -79,6 +80,7 @@ static const MppDecHwCap vdpu1 = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -88,7 +90,7 @@ static const MppDecHwCap vdpu1_2160p = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -96,6 +98,7 @@ static const MppDecHwCap vdpu1_2160p = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -105,7 +108,7 @@ static const MppDecHwCap vdpu1_jpeg_pp = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 1,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 1,
@@ -113,6 +116,7 @@ static const MppDecHwCap vdpu1_jpeg_pp = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -122,7 +126,7 @@ static const MppDecHwCap vdpu2 = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -130,6 +134,7 @@ static const MppDecHwCap vdpu2 = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -139,7 +144,7 @@ static const MppDecHwCap vdpu2_jpeg = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -147,6 +152,7 @@ static const MppDecHwCap vdpu2_jpeg = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -156,7 +162,7 @@ static const MppDecHwCap vdpu2_jpeg_pp = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 1,
@@ -164,6 +170,43 @@ static const MppDecHwCap vdpu2_jpeg_pp = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
+    .reserved           = 0,
+};
+
+static const MppDecHwCap vdpu2_jpeg_fix = {
+    .cap_coding         = HAVE_MJPEG,
+    .type               = VPU_CLIENT_VDPU2,
+    .cap_fbc            = 0,
+    .cap_4k             = 0,
+    .cap_8k             = 0,
+    .cap_colmv_compress = 0,
+    .cap_hw_h265_rps    = 0,
+    .cap_hw_vp9_prob    = 0,
+    .cap_jpg_pp_out     = 0,
+    .cap_10bit          = 0,
+    .cap_down_scale     = 0,
+    .cap_lmt_linebuf    = 1,
+    .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 1,
+    .reserved           = 0,
+};
+
+static const MppDecHwCap vdpu2_jpeg_pp_fix  = {
+    .cap_coding         = CAP_CODING_JPEGD_PP,
+    .type               = VPU_CLIENT_VDPU2_PP,
+    .cap_fbc            = 0,
+    .cap_4k             = 0,
+    .cap_8k             = 0,
+    .cap_colmv_compress = 0,
+    .cap_hw_h265_rps    = 0,
+    .cap_hw_vp9_prob    = 0,
+    .cap_jpg_pp_out     = 1,
+    .cap_10bit          = 0,
+    .cap_down_scale     = 0,
+    .cap_lmt_linebuf    = 1,
+    .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 1,
     .reserved           = 0,
 };
 
@@ -173,7 +216,7 @@ static const MppDecHwCap rk_hevc = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -181,6 +224,7 @@ static const MppDecHwCap rk_hevc = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -190,7 +234,7 @@ static const MppDecHwCap rk_hevc_1080p = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -198,6 +242,7 @@ static const MppDecHwCap rk_hevc_1080p = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -207,7 +252,7 @@ static const MppDecHwCap vdpu341 = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 1,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -215,6 +260,7 @@ static const MppDecHwCap vdpu341 = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -224,7 +270,7 @@ static const MppDecHwCap vdpu341_lite = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 1,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -232,6 +278,7 @@ static const MppDecHwCap vdpu341_lite = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -241,7 +288,7 @@ static const MppDecHwCap vdpu341_lite_1080p = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 1,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -249,6 +296,7 @@ static const MppDecHwCap vdpu341_lite_1080p = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -258,7 +306,7 @@ static const MppDecHwCap vdpu341_h264 = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 1,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -266,6 +314,7 @@ static const MppDecHwCap vdpu341_h264 = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -276,7 +325,7 @@ static const MppDecHwCap vdpu34x = {
     .cap_fbc            = 2,
     .cap_4k             = 1,
     .cap_8k             = 1,
-    .cap_colmv_buf      = 1,
+    .cap_colmv_compress = 1,
     .cap_hw_h265_rps    = 1,
     .cap_hw_vp9_prob    = 1,
     .cap_jpg_pp_out     = 0,
@@ -284,6 +333,7 @@ static const MppDecHwCap vdpu34x = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 0,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -293,7 +343,7 @@ static const MppDecHwCap vdpu38x = {
     .cap_fbc            = 2,
     .cap_4k             = 1,
     .cap_8k             = 1,
-    .cap_colmv_buf      = 1,
+    .cap_colmv_compress = 1,
     .cap_hw_h265_rps    = 1,
     .cap_hw_vp9_prob    = 1,
     .cap_jpg_pp_out     = 0,
@@ -301,6 +351,61 @@ static const MppDecHwCap vdpu38x = {
     .cap_down_scale     = 1,
     .cap_lmt_linebuf    = 0,
     .cap_core_num       = 2,
+    .cap_hw_jpg_fix     = 0,
+    .reserved           = 0,
+};
+
+static const MppDecHwCap vdpu382a = {
+    .cap_coding         = CAP_CODING_VDPU381,
+    .type               = VPU_CLIENT_RKVDEC,
+    .cap_fbc            = 2,
+    .cap_4k             = 1,
+    .cap_8k             = 1,
+    .cap_colmv_compress = 1,
+    .cap_hw_h265_rps    = 1,
+    .cap_hw_vp9_prob    = 1,
+    .cap_jpg_pp_out     = 0,
+    .cap_10bit          = 1,
+    .cap_down_scale     = 1,
+    .cap_lmt_linebuf    = 0,
+    .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
+    .reserved           = 0,
+};
+
+static const MppDecHwCap vdpu382 = {
+    .cap_coding         = CAP_CODING_VDPU382,
+    .type               = VPU_CLIENT_RKVDEC,
+    .cap_fbc            = 2,
+    .cap_4k             = 1,
+    .cap_8k             = 1,
+    .cap_colmv_compress = 1,
+    .cap_hw_h265_rps    = 1,
+    .cap_hw_vp9_prob    = 1,
+    .cap_jpg_pp_out     = 0,
+    .cap_10bit          = 1,
+    .cap_down_scale     = 1,
+    .cap_lmt_linebuf    = 0,
+    .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
+    .reserved           = 0,
+};
+
+static const MppDecHwCap vdpu382_lite = {
+    .cap_coding         = CAP_CODING_VDPU341,
+    .type               = VPU_CLIENT_RKVDEC,
+    .cap_fbc            = 0,
+    .cap_4k             = 1,
+    .cap_8k             = 1,
+    .cap_colmv_compress = 0,
+    .cap_hw_h265_rps    = 1,
+    .cap_hw_vp9_prob    = 1,
+    .cap_jpg_pp_out     = 0,
+    .cap_10bit          = 0,
+    .cap_down_scale     = 1,
+    .cap_lmt_linebuf    = 0,
+    .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -310,7 +415,7 @@ static const MppDecHwCap avspd = {
     .cap_fbc            = 0,
     .cap_4k             = 0,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -318,6 +423,7 @@ static const MppDecHwCap avspd = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -327,7 +433,7 @@ static const MppDecHwCap rkjpegd = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -335,6 +441,7 @@ static const MppDecHwCap rkjpegd = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 0,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 1,
     .reserved           = 0,
 };
 
@@ -344,7 +451,7 @@ static const MppDecHwCap av1d = {
     .cap_fbc            = 0,
     .cap_4k             = 1,
     .cap_8k             = 0,
-    .cap_colmv_buf      = 0,
+    .cap_colmv_compress = 0,
     .cap_hw_h265_rps    = 0,
     .cap_hw_vp9_prob    = 0,
     .cap_jpg_pp_out     = 0,
@@ -352,6 +459,7 @@ static const MppDecHwCap av1d = {
     .cap_down_scale     = 0,
     .cap_lmt_linebuf    = 1,
     .cap_core_num       = 1,
+    .cap_hw_jpg_fix     = 0,
     .reserved           = 0,
 };
 
@@ -368,6 +476,17 @@ static const MppEncHwCap vepu1 = {
 
 static const MppEncHwCap vepu2 = {
     .cap_coding         = CAP_CODING_VEPU1,
+    .type               = VPU_CLIENT_VEPU2,
+    .cap_fbc            = 0,
+    .cap_4k             = 0,
+    .cap_8k             = 0,
+    .cap_hw_osd         = 0,
+    .cap_hw_roi         = 0,
+    .reserved           = 0,
+};
+
+static const MppEncHwCap vepu2_no_vp8 = {
+    .cap_coding         = HAVE_AVC | HAVE_MJPEG,
     .type               = VPU_CLIENT_VEPU2,
     .cap_fbc            = 0,
     .cap_4k             = 0,
@@ -462,6 +581,17 @@ static const MppEncHwCap vepu540c = {
     .cap_fbc            = 0x1 | 0x2,
     .cap_4k             = 0,
     .cap_8k             = 0,
+    .cap_hw_osd         = 0,
+    .cap_hw_roi         = 1,
+    .reserved           = 0,
+};
+
+static const MppEncHwCap vepu540c_no_hevc = {
+    .cap_coding         = (HAVE_AVC | HAVE_MJPEG),
+    .type               = VPU_CLIENT_RKVENC,
+    .cap_fbc            = 0,
+    .cap_4k             = 1,
+    .cap_8k             = 1,
     .cap_hw_osd         = 0,
     .cap_hw_roi         = 1,
     .reserved           = 0,
@@ -636,7 +766,7 @@ static const MppSocInfo mpp_soc_infos[] = {
         "rv1109",
         ROCKCHIP_SOC_RV1109,
         HAVE_VDPU2 | HAVE_VEPU2_JPEG | HAVE_RKVDEC | HAVE_RKVENC,
-        {   &vdpu2_jpeg, &vdpu341_lite, NULL, NULL, NULL, NULL, },
+        {   &vdpu2_jpeg_fix, &vdpu341_lite, NULL, NULL, NULL, NULL, },
         {   &vepu2_jpeg, &vepu541, NULL, NULL, },
     },
     {   /*
@@ -648,7 +778,7 @@ static const MppSocInfo mpp_soc_infos[] = {
         "rv1126",
         ROCKCHIP_SOC_RV1126,
         HAVE_VDPU2 | HAVE_VEPU2_JPEG | HAVE_RKVDEC | HAVE_RKVENC,
-        {   &vdpu2_jpeg, &vdpu341_lite, NULL, NULL, NULL, NULL, },
+        {   &vdpu2_jpeg_fix, &vdpu341_lite, NULL, NULL, NULL, NULL, },
         {   &vepu2_jpeg, &vepu541, NULL, NULL, },
     },
     {   /*
@@ -659,7 +789,7 @@ static const MppSocInfo mpp_soc_infos[] = {
         "rk3326",
         ROCKCHIP_SOC_RK3326,
         HAVE_VDPU2 | HAVE_VDPU2_PP | HAVE_VEPU2 | HAVE_HEVC_DEC,
-        {   &rk_hevc_1080p, &vdpu2, &vdpu2_jpeg_pp, NULL, NULL, NULL, },
+        {   &rk_hevc_1080p, &vdpu2, &vdpu2_jpeg_pp_fix, NULL, NULL, NULL, },
         {   &vepu2, NULL, NULL, NULL, },
     },
     {   /*
@@ -670,7 +800,7 @@ static const MppSocInfo mpp_soc_infos[] = {
         "px30",
         ROCKCHIP_SOC_RK3326,
         HAVE_VDPU2 | HAVE_VDPU2_PP | HAVE_VEPU2 | HAVE_HEVC_DEC,
-        {   &rk_hevc_1080p, &vdpu2, &vdpu2_jpeg_pp, NULL, NULL, NULL, },
+        {   &rk_hevc_1080p, &vdpu2, &vdpu2_jpeg_pp_fix, NULL, NULL, NULL, },
         {   &vepu2, NULL, NULL, NULL, },
     },
     {   /*
@@ -683,8 +813,8 @@ static const MppSocInfo mpp_soc_infos[] = {
         {   &vepu2, NULL, NULL, NULL, },
     },
     {   /*
-         * rk3566/rk3568 has codec:
-         * 1 - vpu2 for jpeg/vp8 encoder and decoder
+         * rk3566/rk3567/rk3568 has codec:
+         * 1 - vpu2 for jpeg encoder and decoder
          * 2 - RK H.264/H.265/VP9 4K decoder
          * 3 - RK H.264/H.265 4K encoder
          * 3 - RK jpeg decoder
@@ -692,12 +822,25 @@ static const MppSocInfo mpp_soc_infos[] = {
         "rk3566",
         ROCKCHIP_SOC_RK3566,
         HAVE_VDPU2 | HAVE_VDPU2_PP | HAVE_VEPU2 | HAVE_RKVDEC | HAVE_RKVENC | HAVE_JPEG_DEC,
-        {   &vdpu34x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp, NULL, NULL, },
-        {   &vepu540, &vepu2, NULL, NULL, },
+        {   &vdpu34x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp_fix, NULL, NULL, },
+        {   &vepu540, &vepu2_no_vp8, NULL, NULL, },
     },
     {   /*
-         * rk3566/rk3568 has codec:
-         * 1 - vpu2 for jpeg/vp8 encoder and decoder
+         * rk3566/rk3567/rk3568 has codec:
+         * 1 - vpu2 for jpeg encoder and decoder
+         * 2 - RK H.264/H.265/VP9 4K decoder
+         * 3 - RK H.264/H.265 4K encoder
+         * 3 - RK jpeg decoder
+         */
+        "rk3567",
+        ROCKCHIP_SOC_RK3567,
+        HAVE_VDPU2 | HAVE_VDPU2_PP | HAVE_VEPU2 | HAVE_RKVDEC | HAVE_RKVENC | HAVE_JPEG_DEC,
+        {   &vdpu34x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp_fix, NULL, NULL, },
+        {   &vepu540, &vepu2_no_vp8, NULL, NULL, },
+    },
+    {   /*
+         * rk3566/rk3567/rk3568 has codec:
+         * 1 - vpu2 for jpeg encoder and decoder
          * 2 - RK H.264/H.265/VP9 4K decoder
          * 3 - RK H.264/H.265 4K encoder
          * 3 - RK jpeg decoder
@@ -705,8 +848,8 @@ static const MppSocInfo mpp_soc_infos[] = {
         "rk3568",
         ROCKCHIP_SOC_RK3568,
         HAVE_VDPU2 | HAVE_VDPU2_PP | HAVE_VEPU2 | HAVE_RKVDEC | HAVE_RKVENC | HAVE_JPEG_DEC,
-        {   &vdpu34x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp, NULL, NULL, },
-        {   &vepu540, &vepu2, NULL, NULL, },
+        {   &vdpu34x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp_fix, NULL, NULL, },
+        {   &vepu540, &vepu2_no_vp8, NULL, NULL, },
     },
     {   /*
          * rk3588 has codec:
@@ -719,21 +862,46 @@ static const MppSocInfo mpp_soc_infos[] = {
         ROCKCHIP_SOC_RK3588,
         HAVE_VDPU2 | HAVE_VDPU2_PP | HAVE_VEPU2 | HAVE_RKVDEC | HAVE_RKVENC |
         HAVE_JPEG_DEC | HAVE_AV1DEC | HAVE_AVSDEC | HAVE_VEPU2_JPEG,
-        {   &vdpu38x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp, &av1d, &avspd},
+        {   &vdpu38x, &rkjpegd, &vdpu2, &vdpu2_jpeg_pp_fix, &av1d, &avspd},
         {   &vepu58x, &vepu2, &vepu2_jpeg, NULL, },
+    },
+    {   /*
+         * rk3528a has codec:
+         * 1 - vpu2 for jpeg/vp8 decoder
+         * 2 - RK H.264/H.265/VP9 4K decoder
+         * 3 - RK H.264/H.265 1080P encoder
+         * 4 - RK jpeg decoder
+         */
+        "rk3528a",
+        ROCKCHIP_SOC_RK3528,
+        HAVE_RKVDEC | HAVE_RKVENC | HAVE_VDPU2 | HAVE_JPEG_DEC | HAVE_AVSDEC,
+        {   &vdpu382a, &rkjpegd, &vdpu2, &avspd, NULL, NULL, },
+        {   &vepu540c, NULL, NULL, NULL, },
     },
     {   /*
          * rk3528 has codec:
          * 1 - vpu2 for jpeg/vp8 decoder
-         * 2 - RK H.264/H.265/VP9 4K decoder
+         * 2 - RK H.264/H.265 4K decoder
          * 3 - RK H.264/H.265 1080P encoder
          * 4 - RK jpeg decoder
          */
         "rk3528",
         ROCKCHIP_SOC_RK3528,
         HAVE_RKVDEC | HAVE_RKVENC | HAVE_VDPU2 | HAVE_JPEG_DEC | HAVE_AVSDEC,
-        {   &vdpu38x, &rkjpegd, &vdpu2, &avspd, NULL, NULL, },
+        {   &vdpu382, &rkjpegd, &vdpu2, &avspd, NULL, NULL, },
         {   &vepu540c, NULL, NULL, NULL, },
+    },
+    {   /*
+         * rk3562 has codec:
+         * 1 - RK H.264/H.265/VP9 4K decoder
+         * 2 - RK H.264 1080P encoder
+         * 3 - RK jpeg decoder
+         */
+        "rk3562",
+        ROCKCHIP_SOC_RK3562,
+        HAVE_RKVDEC | HAVE_RKVENC | HAVE_JPEG_DEC,
+        {   &vdpu382_lite, &rkjpegd, NULL, NULL, NULL, NULL, },
+        {   &vepu540c_no_hevc, NULL, NULL, NULL, },
     },
 };
 

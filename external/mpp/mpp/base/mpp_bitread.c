@@ -63,6 +63,29 @@ static MPP_RET update_curbyte_h264(BitReadCtx_t *bitctx)
     return MPP_OK;
 }
 
+static MPP_RET update_curbyte_h2645_sei(BitReadCtx_t *bitctx)
+{
+    if (bitctx->bytes_left_ < 1)
+        return  MPP_ERR_READ_BIT;
+
+    // Emulation prevention three-byte detection.
+    // If a sequence of 0x000003 is found, skip (ignore) the last byte (0x03).
+    if ((*bitctx->data_ == 0x03)
+        && ((bitctx->prev_two_bytes_ & 0xffff) == 0)) {
+        // Detected 0x000003, skip last byte.
+        ++bitctx->data_;
+        // Need another full three bytes before we can detect the sequence again.
+        bitctx->prev_two_bytes_ = 0xffff;
+    }
+    // Load a new byte and advance pointers.
+    bitctx->curr_byte_ = *bitctx->data_++ & 0xff;
+    --bitctx->bytes_left_;
+    bitctx->num_remaining_bits_in_curr_byte_ = 8;
+    bitctx->prev_two_bytes_ = (bitctx->prev_two_bytes_ << 8) | bitctx->curr_byte_;
+
+    return MPP_OK;
+}
+
 static MPP_RET update_curbyte_avs2(BitReadCtx_t *bitctx)
 {
     if (bitctx->bytes_left_ < 1)
@@ -168,6 +191,9 @@ MPP_RET mpp_skip_bits(BitReadCtx_t *bitctx, RK_S32 num_bits)
 */
 MPP_RET mpp_skip_longbits(BitReadCtx_t *bitctx, RK_S32 num_bits)
 {
+    if (num_bits < 32)
+        return mpp_skip_bits(bitctx, num_bits);
+
     if (mpp_skip_bits(bitctx, 16)) {
         return  MPP_ERR_READ_BIT;
     }
@@ -316,6 +342,9 @@ void mpp_set_bitread_pseudo_code_type(BitReadCtx_t *bitctx, PseudoCodeType type)
     switch (type) {
     case PSEUDO_CODE_H264_H265:
         bitctx->update_curbyte = update_curbyte_h264;
+        break;
+    case PSEUDO_CODE_H264_H265_SEI:
+        bitctx->update_curbyte = update_curbyte_h2645_sei;
         break;
     case PSEUDO_CODE_AVS2:
         bitctx->update_curbyte = update_curbyte_avs2;

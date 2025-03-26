@@ -1,8 +1,8 @@
 project('gst-plugins-bad', 'c',
-  version : '1.10.0',
+  version : '1.14.4',
   license : 'LGPL',
   meson_version : '>= 0.47',
-  default_options : [ 'warning_level=1',
+  default_options : [ 'warning_level=2',
                       'buildtype=debugoptimized' ])
 
 gst_version = meson.project_version()
@@ -51,8 +51,6 @@ add_project_arguments('-DG_DISABLE_DEPRECATED', language: 'c')
 
 add_project_arguments('-DUNUSED=__attribute__((unused))', language: 'c')
 
-add_project_arguments(['-Wall', '-Werror'], language: 'c')
-
 cdata = configuration_data()
 
 cdata.set_quoted('VERSION', gst_version)
@@ -80,6 +78,8 @@ gstallocators_dep = dependency('gstreamer-allocators-1.0', version : gst_req,
   fallback : ['gst-plugins-base', 'allocators_dep'])
 gstvideo_dep = dependency('gstreamer-video-1.0', version : gst_req,
   fallback : ['gst-plugins-base', 'video_dep'])
+gstpbutils_dep = dependency('gstreamer-pbutils-1.0', version : gst_req,
+  fallback : ['gst-plugins-base', 'pbutils_dep'])
 
 glib_dep = dependency('glib-2.0', version : glib_req,
   fallback : ['glib', 'libglib_dep'])
@@ -88,21 +88,35 @@ drm_dep = dependency('libdrm', required : get_option('rkximage'))
 mpp_dep = dependency('rockchip_mpp', required : get_option('rockchipmpp'))
 rga_dep = dependency('librga', required : get_option('rga'))
 
-if rga_dep.found()
-  cdata.set10('HAVE_RGA', 1)
+if rga_dep.found() and not get_option('rga').disabled()
+  cdata.set('HAVE_RGA', 1)
+endif
+
+if not get_option('vpxalphadec').auto()
+  vpxalphadec = get_option('vpxalphadec').enabled()
+else
+  # Both codecalphademux and alphacombine elements were added in 1.19
+  vpxalphadec = gst_dep.version().version_compare('>=1.19')
+endif
+
+if vpxalphadec
+  cdata.set('USE_VPXALPHADEC', 1)
 endif
 
 if cc.has_header_symbol('gst/video/video-format.h', 'GST_VIDEO_FORMAT_NV12_10LE40', dependencies : gstvideo_dep)
-  cdata.set10('HAVE_NV12_10LE40', 1)
+  cdata.set('HAVE_NV12_10LE40', 1)
+endif
+
+if cc.has_header_symbol('gst/video/video-format.h', 'GST_VIDEO_FORMAT_NV16_10LE40', dependencies : gstvideo_dep)
+  cdata.set('HAVE_NV16_10LE40', 1)
 endif
 
 gst_rockchip_args = ['-DHAVE_CONFIG_H']
 configinc = include_directories('.')
-libsinc = include_directories('gst-libs')
 
 subdir('gst')
 
 configure_file(output : 'config.h', configuration : cdata)
 
 python = import('python').find_installation()
-run_command(python, '-c', 'import shutil; shutil.copy("hooks/pre-commit.hook", ".git/hooks/pre-commit")')
+run_command(python, '-c', 'import shutil; shutil.copy("hooks/pre-commit.hook", ".git/hooks/pre-commit")', check : false)

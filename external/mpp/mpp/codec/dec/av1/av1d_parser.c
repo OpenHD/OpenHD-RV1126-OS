@@ -34,6 +34,34 @@
 #include "mpp_frame_impl.h"
 
 RK_U32 av1d_debug = 0;
+
+static const RK_S16 div_lut[AV1_DIV_LUT_NUM] = {
+    16384, 16320, 16257, 16194, 16132, 16070, 16009, 15948, 15888, 15828, 15768,
+    15709, 15650, 15592, 15534, 15477, 15420, 15364, 15308, 15252, 15197, 15142,
+    15087, 15033, 14980, 14926, 14873, 14821, 14769, 14717, 14665, 14614, 14564,
+    14513, 14463, 14413, 14364, 14315, 14266, 14218, 14170, 14122, 14075, 14028,
+    13981, 13935, 13888, 13843, 13797, 13752, 13707, 13662, 13618, 13574, 13530,
+    13487, 13443, 13400, 13358, 13315, 13273, 13231, 13190, 13148, 13107, 13066,
+    13026, 12985, 12945, 12906, 12866, 12827, 12788, 12749, 12710, 12672, 12633,
+    12596, 12558, 12520, 12483, 12446, 12409, 12373, 12336, 12300, 12264, 12228,
+    12193, 12157, 12122, 12087, 12053, 12018, 11984, 11950, 11916, 11882, 11848,
+    11815, 11782, 11749, 11716, 11683, 11651, 11619, 11586, 11555, 11523, 11491,
+    11460, 11429, 11398, 11367, 11336, 11305, 11275, 11245, 11215, 11185, 11155,
+    11125, 11096, 11067, 11038, 11009, 10980, 10951, 10923, 10894, 10866, 10838,
+    10810, 10782, 10755, 10727, 10700, 10673, 10645, 10618, 10592, 10565, 10538,
+    10512, 10486, 10460, 10434, 10408, 10382, 10356, 10331, 10305, 10280, 10255,
+    10230, 10205, 10180, 10156, 10131, 10107, 10082, 10058, 10034, 10010, 9986,
+    9963,  9939,  9916,  9892,  9869,  9846,  9823,  9800,  9777,  9754,  9732,
+    9709,  9687,  9664,  9642,  9620,  9598,  9576,  9554,  9533,  9511,  9489,
+    9468,  9447,  9425,  9404,  9383,  9362,  9341,  9321,  9300,  9279,  9259,
+    9239,  9218,  9198,  9178,  9158,  9138,  9118,  9098,  9079,  9059,  9039,
+    9020,  9001,  8981,  8962,  8943,  8924,  8905,  8886,  8867,  8849,  8830,
+    8812,  8793,  8775,  8756,  8738,  8720,  8702,  8684,  8666,  8648,  8630,
+    8613,  8595,  8577,  8560,  8542,  8525,  8508,  8490,  8473,  8456,  8439,
+    8422,  8405,  8389,  8372,  8355,  8339,  8322,  8306,  8289,  8273,  8257,
+    8240,  8224,  8208,  8192
+};
+
 /**
  * Clip a signed integer into the -(2^p),(2^p-1) range.
  * @param  a value to clip
@@ -92,6 +120,10 @@ static MPP_RET get_pixel_format(Av1CodecContext *ctx)
                 pix_fmt = MPP_FMT_YUV420SP;
             else if (bit_depth == 10) {
                 pix_fmt = MPP_FMT_YUV420SP_10BIT;
+                /* rk3588, allow user config 8bit for 10bit source. */
+                if ((ctx->usr_set_fmt & MPP_FRAME_FMT_MASK) == MPP_FMT_YUV420SP &&
+                    (s->cfg->base.out_fmt & MPP_FRAME_FMT_MASK) == MPP_FMT_YUV420SP)
+                    pix_fmt = MPP_FMT_YUV420SP;
             } else {
                 mpp_err_f("no support MPP_FMT_YUV420SP bit depth > 8\n");
                 return -1;
@@ -153,9 +185,9 @@ static void read_global_param(AV1Context *s, RK_S32 type, RK_S32 ref, RK_S32 idx
      * with defaults at this point.
      */
     if (s->raw_frame_header->primary_ref_frame == AV1_PRIMARY_REF_NONE)
-        prev_gm_param = s->cur_frame.gm_params[ref][idx];
+        prev_gm_param = s->cur_frame.gm_params[ref].wmmat[idx];
     else
-        prev_gm_param = s->ref[prev_frame].gm_params[ref][idx];
+        prev_gm_param = s->ref[prev_frame].gm_params[ref].wmmat[idx];
 
     if (idx < 2) {
         if (type == AV1_WARP_MODEL_TRANSLATION) {
@@ -174,9 +206,80 @@ static void read_global_param(AV1Context *s, RK_S32 type, RK_S32 ref, RK_S32 idx
     mx = 1 << abs_bits;
     r = (prev_gm_param >> prec_diff) - sub;
 
-    s->cur_frame.gm_params[ref][idx] =
+    s->cur_frame.gm_params[ref].wmmat[idx] =
         (decode_signed_subexp_with_ref(s->raw_frame_header->gm_params[ref][idx],
                                        -mx, mx + 1, r) << prec_diff) + round;
+}
+
+static RK_U16 round_two(RK_U64 x, RK_U16 n)
+{
+    if (n == 0)
+        return x;
+    return ((x + ((RK_U64)1 << (n - 1))) >> n);
+}
+
+static RK_S64 round_two_signed(RK_S64 x, RK_U16 n)
+{
+    return ((x < 0) ? -((RK_S64)round_two(-x, n)) : (RK_S64)round_two(x, n));
+}
+
+/**
+ * Resolve divisor process.
+ * see spec 7.11.3.7
+ */
+static RK_S16 resolve_divisor(RK_U32 d, RK_S16 *shift)
+{
+    RK_S32 e, f;
+
+    *shift = mpp_log2(d);
+    e = d - (1 << (*shift));
+    if (*shift > AV1_DIV_LUT_BITS)
+        f = round_two(e, *shift - AV1_DIV_LUT_BITS);
+    else
+        f = e << (AV1_DIV_LUT_BITS - (*shift));
+
+    *shift += AV1_DIV_LUT_PREC_BITS;
+
+    return div_lut[f];
+}
+
+/**
+ * check if global motion params is valid.
+ * see spec 7.11.3.6
+ */
+static RK_U8 get_shear_params_valid(AV1Context *s, RK_S32 idx)
+{
+    RK_S16 alpha, beta, gamma, delta, divf, divs;
+    RK_S64 v, w;
+    RK_S32 *param = &s->cur_frame.gm_params[idx].wmmat[0];
+
+    if (param[2] < 0)
+        return 0;
+
+    alpha = MPP_CLIP3(INT16_MIN, INT16_MAX, param[2] - (1 << AV1_WARPEDMODEL_PREC_BITS));
+    beta  = MPP_CLIP3(INT16_MIN, INT16_MAX, param[3]);
+    divf  = resolve_divisor(MPP_ABS(param[2]), &divs) * (param[2] < 0 ? -1 : 1);
+    v     = (RK_S64)param[4] * (1 << AV1_WARPEDMODEL_PREC_BITS);
+    w     = (RK_S64)param[3] * param[4];
+    gamma = MPP_CLIP3(INT16_MIN, INT16_MAX, (RK_S32)round_two_signed((v * divf), divs));
+    delta = MPP_CLIP3(INT16_MIN, INT16_MAX, param[5] - (RK_S32)round_two_signed((w * divf), divs) -
+                      (1 << AV1_WARPEDMODEL_PREC_BITS));
+
+    alpha = round_two_signed(alpha, AV1_WARP_PARAM_REDUCE_BITS) << AV1_WARP_PARAM_REDUCE_BITS;
+    beta  = round_two_signed(beta,  AV1_WARP_PARAM_REDUCE_BITS) << AV1_WARP_PARAM_REDUCE_BITS;
+    gamma = round_two_signed(gamma, AV1_WARP_PARAM_REDUCE_BITS) << AV1_WARP_PARAM_REDUCE_BITS;
+    delta = round_two_signed(delta, AV1_WARP_PARAM_REDUCE_BITS) << AV1_WARP_PARAM_REDUCE_BITS;
+
+    s->cur_frame.gm_params[idx].alpha = alpha;
+    s->cur_frame.gm_params[idx].beta = beta;
+    s->cur_frame.gm_params[idx].gamma = gamma;
+    s->cur_frame.gm_params[idx].delta = delta;
+
+    if ((4 * MPP_ABS(alpha) + 7 * MPP_ABS(beta)) >= (1 << AV1_WARPEDMODEL_PREC_BITS) ||
+        (4 * MPP_ABS(gamma) + 4 * MPP_ABS(delta)) >= (1 << AV1_WARPEDMODEL_PREC_BITS))
+        return 0;
+
+    return 1;
 }
 
 /**
@@ -188,18 +291,23 @@ static void global_motion_params(AV1Context *s)
     const AV1RawFrameHeader *header = s->raw_frame_header;
     RK_S32 type, ref;
     RK_S32 i = 0;
+    AV1Context *ctx = s;
 
     for (ref = AV1_REF_FRAME_LAST; ref <= AV1_REF_FRAME_ALTREF; ref++) {
-        s->cur_frame.gm_type[ref] = AV1_WARP_MODEL_IDENTITY;
+        s->cur_frame.gm_params[ref].wmtype = AV1_WARP_MODEL_IDENTITY;
         for (i = 0; i < 6; i++)
-            s->cur_frame.gm_params[ref][i] = (i % 3 == 2) ?
-                                             1 << AV1_WARPEDMODEL_PREC_BITS : 0;
+            s->cur_frame.gm_params[ref].wmmat[i] = (i % 3 == 2) ?
+                                                   1 << AV1_WARPEDMODEL_PREC_BITS : 0;
     }
     if (header->frame_type == AV1_FRAME_KEY ||
         header->frame_type == AV1_FRAME_INTRA_ONLY)
         return;
 
     for (ref = AV1_REF_FRAME_LAST; ref <= AV1_REF_FRAME_ALTREF; ref++) {
+        RK_U8 ref_uses_scaling = ctx->frame_width != ctx->ref_s[ref].frame_width ||
+                                 ctx->frame_height != ctx->ref_s[ref].frame_height;
+        RK_U32 shear_params_valid = 0;
+
         if (header->is_global[ref]) {
             if (header->is_rot_zoom[ref]) {
                 type = AV1_WARP_MODEL_ROTZOOM;
@@ -210,7 +318,7 @@ static void global_motion_params(AV1Context *s)
         } else {
             type = AV1_WARP_MODEL_IDENTITY;
         }
-        s->cur_frame.gm_type[ref] = type;
+        s->cur_frame.gm_params[ref].wmtype = type;
 
         if (type >= AV1_WARP_MODEL_ROTZOOM) {
             read_global_param(s, type, ref, 2);
@@ -219,14 +327,30 @@ static void global_motion_params(AV1Context *s)
                 read_global_param(s, type, ref, 4);
                 read_global_param(s, type, ref, 5);
             } else {
-                s->cur_frame.gm_params[ref][4] = -s->cur_frame.gm_params[ref][3];
-                s->cur_frame.gm_params[ref][5] = s->cur_frame.gm_params[ref][2];
+                s->cur_frame.gm_params[ref].wmmat[4] = -s->cur_frame.gm_params[ref].wmmat[3];
+                s->cur_frame.gm_params[ref].wmmat[5] = s->cur_frame.gm_params[ref].wmmat[2];
             }
         }
         if (type >= AV1_WARP_MODEL_TRANSLATION) {
             read_global_param(s, type, ref, 0);
             read_global_param(s, type, ref, 1);
         }
+
+        if (type <= AV1_WARP_MODEL_AFFINE)
+            shear_params_valid = get_shear_params_valid(ctx, ref);
+
+        if (!shear_params_valid || ref_uses_scaling) {
+            ctx->cur_frame.gm_params[ref].alpha = -32768;
+            ctx->cur_frame.gm_params[ref].beta  = -32768;
+            ctx->cur_frame.gm_params[ref].gamma = -32768;
+            ctx->cur_frame.gm_params[ref].delta = -32768;
+        }
+        av1d_dbg(AV1D_DBG_HEADER, "ref %d alpa %d beta %d gamma %d delta %d\n",
+                 ref,
+                 ctx->cur_frame.gm_params[ref].alpha,
+                 ctx->cur_frame.gm_params[ref].beta,
+                 ctx->cur_frame.gm_params[ref].gamma,
+                 ctx->cur_frame.gm_params[ref].delta);
     }
 }
 
@@ -401,11 +525,14 @@ static RK_S32 get_tiles_info(Av1CodecContext *ctx, const AV1RawTileGroup *tile_g
     bytestream_init(&gb, tile_group->tile_data.data,
                     tile_group->tile_data.data_size);
 
-    for (tile_num = tile_group->tg_start; tile_num <= tile_group->tg_end; tile_num++) {
+    if (s->tile_offset)
+        s->tile_offset += tile_group->tile_data.offset;
 
+    for (tile_num = tile_group->tg_start; tile_num <= tile_group->tg_end; tile_num++) {
         if (tile_num == tile_group->tg_end) {
-            s->tile_offset_start[tile_num] = bytestream_tell(&gb);
-            s->tile_offset_end[tile_num] = bytestream_tell(&gb) + bytestream_get_bytes_left(&gb);
+            s->tile_offset_start[tile_num] = bytestream_tell(&gb) + s->tile_offset;
+            s->tile_offset_end[tile_num] = bytestream_tell(&gb) + bytestream_get_bytes_left(&gb) + s->tile_offset;
+            s->tile_offset = s->tile_offset_end[tile_num];
             return 0;
         }
         size_bytes = s->raw_frame_header->tile_size_bytes_minus1 + 1;
@@ -418,9 +545,9 @@ static RK_S32 get_tiles_info(Av1CodecContext *ctx, const AV1RawTileGroup *tile_g
             return MPP_ERR_VALUE;
         size++;
 
-        s->tile_offset_start[tile_num] = bytestream_tell(&gb);
+        s->tile_offset_start[tile_num] = bytestream_tell(&gb) + s->tile_offset;
 
-        s->tile_offset_end[tile_num] = bytestream_tell(&gb) + size;
+        s->tile_offset_end[tile_num] = bytestream_tell(&gb) + size + s->tile_offset;
 
         bytestream_skipu(&gb, size);
     }
@@ -505,12 +632,9 @@ static RK_S32 av1d_frame_ref(Av1CodecContext *ctx, AV1Frame *dst, const AV1Frame
     dst->temporal_id = src->temporal_id;
     dst->order_hint  = src->order_hint;
 
-    memcpy(dst->gm_type,
-           src->gm_type,
-           AV1_NUM_REF_FRAMES * sizeof(uint8_t));
     memcpy(dst->gm_params,
            src->gm_params,
-           AV1_NUM_REF_FRAMES * 6 * sizeof(RK_S32));
+           sizeof(src->gm_params));
     memcpy(dst->skip_mode_frame_idx,
            src->skip_mode_frame_idx,
            2 * sizeof(uint8_t));
@@ -601,11 +725,20 @@ static MPP_RET get_current_frame(Av1CodecContext *ctx)
         av1d_frame_unref(ctx, frame);
 
     mpp_frame_set_meta(frame->f, NULL);
-    mpp_frame_set_width(frame->f, ctx->width);
-    mpp_frame_set_height(frame->f, ctx->height);
+    mpp_frame_set_width(frame->f, s->frame_width);
+    mpp_frame_set_height(frame->f, s->frame_height);
 
-    mpp_frame_set_hor_stride(frame->f, MPP_ALIGN(ctx->width * s->bit_depth / 8, 8));
-    mpp_frame_set_ver_stride(frame->f, MPP_ALIGN(ctx->height, 8));
+    /*
+     * rk3588, user can set 8bit for 10bit source.
+     * If user config 8bit output when input video is 10bti,
+     * here should set hor_stride according to 8bit.
+     */
+    if (MPP_FRAME_FMT_IS_YUV_10BIT(ctx->pix_fmt))
+        mpp_frame_set_hor_stride(frame->f, MPP_ALIGN(s->frame_width * s->bit_depth / 8, 8));
+    else
+        mpp_frame_set_hor_stride(frame->f, MPP_ALIGN(s->frame_width, 8));
+
+    mpp_frame_set_ver_stride(frame->f, MPP_ALIGN(s->frame_height, 8));
     mpp_frame_set_errinfo(frame->f, 0);
     mpp_frame_set_discard(frame->f, 0);
     mpp_frame_set_pts(frame->f, s->pts);
@@ -658,7 +791,6 @@ static MPP_RET get_current_frame(Av1CodecContext *ctx)
           mpp_err_f( "Failed to init tile data.\n");
           return ret;
       }*/
-
     global_motion_params(s);
     skip_mode_params(s);
     coded_lossless_param(s);
@@ -765,7 +897,7 @@ MPP_RET av1d_parser_frame(Av1CodecContext *ctx, HalDecTask *task)
 
     s->current_obu.data = data;
     s->current_obu.data_size = size;
-    s->obu_len = 0;
+    s->tile_offset = 0;
     ret = mpp_av1_split_fragment(s, &s->current_obu, 0);
     if (ret < 0) {
         return ret;
@@ -991,11 +1123,19 @@ MPP_RET av1d_paser_reset(Av1CodecContext *ctx)
     av1d_dbg_func("enter ctx %p\n", ctx);
     for ( i = 0; i < MPP_ARRAY_ELEMS(s->ref); i++) {
         AV1Frame *f = &s->ref[i];
-        if (f->ref) {
-            av1d_frame_unref(ctx, &s->ref[i]);
-        }
 
+        if (f->ref)
+            av1d_frame_unref(ctx, &s->ref[i]);
     }
+
+    if (s->cur_frame.ref) {
+        av1d_frame_unref(ctx, &s->cur_frame);
+    }
+
+    ctx->frame_header = 0;
+    ctx->stream_offset = 0;
+    ctx->eos = 0;
+
     av1d_dbg_func("leave ctx %p\n", ctx);
     return ret;
 
@@ -1087,12 +1227,10 @@ RK_S32 av1_extract_obu(AV1OBU *obu, uint8_t *buf, RK_S32 length)
     return len;
 }
 
-
-RK_S32 av1d_split_frame(SplitContext_t *ctx,
+RK_S32 av1d_split_frame(Av1CodecContext *ctx,
                         RK_U8 **out_data, RK_S32 *out_size,
                         RK_U8 *data, RK_S32 size)
 {
-    (void)ctx;
     (void)out_data;
     (void)out_size;
 
@@ -1106,22 +1244,35 @@ RK_S32 av1d_split_frame(SplitContext_t *ctx,
         RK_S32 len = av1_extract_obu(&obu, ptr, size);
         if (len < 0)
             break;
-        if (obu.type == AV1_OBU_FRAME_HEADER ||
-            obu.type == AV1_OBU_FRAME) {
+        if (obu.type == AV1_OBU_FRAME_HEADER || obu.type == AV1_OBU_FRAME ||
+            ((obu.type == AV1_OBU_TEMPORAL_DELIMITER ||
+              obu.type == AV1_OBU_SEQUENCE_HEADER) && ctx->frame_header))
+            ctx->frame_header ++;
+        if (ctx->frame_header == 2) {
+            *out_size = (RK_S32)(ptr - data);
+            ctx->new_frame = 1;
+            ctx->frame_header = 0;
+            return ptr - data;
+        }
+        if (obu.type == AV1_OBU_FRAME) {
             ptr      += len;
             size     -= len;
             *out_size = (RK_S32)(ptr - data);
+            ctx->new_frame = 1;
+            ctx->frame_header = 0;
             return ptr - data;
         }
         ptr      += len;
         size -= len;
     }
 
-    return 0;
+    *out_size = (RK_S32)(ptr - data);
+
+    return ptr - data;
 
     av1d_dbg_func("leave ctx %p\n", ctx);
-    return 0;
 
+    return 0;
 }
 
 MPP_RET av1d_get_frame_stream(Av1CodecContext *ctx, RK_U8 *buf, RK_S32 length)
@@ -1131,21 +1282,23 @@ MPP_RET av1d_get_frame_stream(Av1CodecContext *ctx, RK_U8 *buf, RK_S32 length)
     RK_S32 buff_size = 0;
     RK_U8 *data = NULL;
     RK_S32 size = 0;
+    RK_S32 offset = ctx->stream_offset;
 
     data = (RK_U8 *)mpp_packet_get_data(ctx->pkt);
     size = (RK_S32)mpp_packet_get_size(ctx->pkt);
 
-    if (length > size) {
-        mpp_free(data);
+    if ((length + offset) > size) {
         mpp_packet_deinit(&ctx->pkt);
-        buff_size = length + 10 * 1024;
-        data = mpp_malloc(RK_U8, buff_size);
-        mpp_packet_init(&ctx->pkt, (void *)data, length);
+        buff_size = length + offset + 10 * 1024;
+        data = mpp_realloc(data, RK_U8, buff_size);
+        mpp_packet_init(&ctx->pkt, (void *)data, buff_size);
         mpp_packet_set_size(ctx->pkt, buff_size);
+        ctx->stream_size = buff_size;
     }
 
-    memcpy(data, buf, length);
-    mpp_packet_set_length(ctx->pkt, length);
+    memcpy(data + offset, buf, length);
+    ctx->stream_offset += length;
+    mpp_packet_set_length(ctx->pkt, ctx->stream_offset);
 
     av1d_dbg_func("leave ctx %p\n", ctx);
     return ret;

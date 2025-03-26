@@ -240,13 +240,14 @@ static void vepu580_h265e_tune_reg_patch(void *p)
     scene_mode = ctx->cfg->tune.scene_mode == MPP_ENC_SCENE_MODE_IPC ? 0 : 1;
     tune->ap_motion_flag = scene_mode;
     /* modify register here */
-    H265eV580RegSet *regs = (H265eV580RegSet *)ctx->regs[0];
+    H265eV580RegSet *regs = ctx->frm->regs_set[0];
     hevc_vepu580_rc_klut *rc_regs =  &regs->reg_rc_klut;
     hevc_vepu580_wgt *reg_wgt = &regs->reg_wgt;
     vepu580_rdo_cfg  *reg_rdo = &regs->reg_rdo;
     RdoAtfSkipCfg *p_rdo_atf_skip;
     RdoAtfCfg* p_rdo_atf;
     RK_U32 scene_motion_flag = tune->ap_motion_flag * 2 + tune->curr_scene_motion_flag;
+    MppEncHwCfg *hw = &ctx->cfg->hw;
 
     if (scene_motion_flag > 3) {
         mpp_err_f("scene_motion_flag is a wrong value %d\n", scene_motion_flag);
@@ -451,8 +452,13 @@ static void vepu580_h265e_tune_reg_patch(void *p)
     reg_wgt->i32_sobel_c.intra_l32_sobel_c1_qp3 = intra_lvl32_sobel_c[scene_motion_flag][3];
     reg_wgt->i32_sobel_c.intra_l32_sobel_c1_qp4 = intra_lvl32_sobel_c[scene_motion_flag][4];
 
-    reg_wgt->reg1484_qnt_bias_comb.qnt_bias_i = qnt_bias_i[scene_motion_flag];
-    reg_wgt->reg1484_qnt_bias_comb.qnt_bias_p = qnt_bias_p[scene_motion_flag];
+    if (hw->qbias_en) {
+        reg_wgt->reg1484_qnt_bias_comb.qnt_bias_i = hw->qbias_i;
+        reg_wgt->reg1484_qnt_bias_comb.qnt_bias_p = hw->qbias_p;
+    } else {
+        reg_wgt->reg1484_qnt_bias_comb.qnt_bias_i = qnt_bias_i[scene_motion_flag];
+        reg_wgt->reg1484_qnt_bias_comb.qnt_bias_p = qnt_bias_p[scene_motion_flag];
+    }
     reg_wgt->rime_sqi_thd.cime_sad_th0 = rime_sqi_cime_sad_th[scene_motion_flag];
     reg_wgt->fme_sqi_thd0.cime_sad_pu16_th = fme_sqi_cime_sad_pu16_th[scene_motion_flag];
     reg_wgt->fme_sqi_thd0.cime_sad_pu32_th = fme_sqi_cime_sad_pu32_th[scene_motion_flag];
@@ -476,10 +482,11 @@ static void vepu580_h265e_tune_stat_update(void *p)
     RK_S32 j;
     RK_S32 i = 0;
     RK_S32 mvbit = 10;
-    vepu580_h265_fbk *fb = &ctx->feedback;
+    Vepu580H265Fbk *fb = &ctx->frm->feedback;
 
     for (i = 0; i < (RK_S32)ctx->tile_num; i++) {
-        H265eV580StatusElem *elem = (H265eV580StatusElem *)ctx->reg_out[i];
+        H265eV580StatusElem *elem = ctx->frm->regs_ret[i];
+
         fb->st_md_sad_b16num0 += elem->st.md_sad_b16num0;
         fb->st_md_sad_b16num1 += elem->st.md_sad_b16num1;
         fb->st_md_sad_b16num2 += elem->st.md_sad_b16num2;

@@ -37,6 +37,7 @@
 #define MAX_UINT_BITS(length) ((UINT64_C(1) << (length)) - 1)
 #define MAX_INT_BITS(length) ((INT64_C(1) << ((length) - 1)) - 1)
 #define MIN_INT_BITS(length) (-(INT64_C(1) << ((length) - 1)))
+
 /**
  * Clip a signed integer into the -(2^p),(2^p-1) range.
  * @param  a value to clip
@@ -180,7 +181,7 @@ RK_S32 mpp_av1_read_unsigned(BitReadCtx_t *gbc,
         return MPP_NOK;
     }
 
-    READ_BITS(gbc, width, &value);
+    READ_BITS_LONG(gbc, width, &value);
 
     if (value < range_min || value > range_max) {
         mpp_err_f("%s out of range: "
@@ -219,7 +220,7 @@ RK_S32 mpp_av1_read_signed(BitReadCtx_t *gbc,
         return MPP_NOK;
     }
 
-    READ_BITS(gbc, width, &value);
+    READ_BITS_LONG(gbc, width, &value);
     value = sign_extend(value, width);
     if (value < range_min || value > range_max) {
         mpp_err_f("%s out of range: "
@@ -729,6 +730,8 @@ static RK_S32 mpp_av1_temporal_delimiter_obu(AV1Context *ctx, BitReadCtx_t *gb)
 
     return 0;
 }
+
+/* spec 7.8 */
 static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
                                      AV1RawFrameHeader *current)
 {
@@ -748,11 +751,19 @@ static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
     ref_frame_idx[AV1_REF_FRAME_LAST - AV1_REF_FRAME_LAST] = current->last_frame_idx;
     ref_frame_idx[AV1_REF_FRAME_GOLDEN - AV1_REF_FRAME_LAST] = current->golden_frame_idx;
 
+    /*
+     * An array usedFrame marking which reference frames
+     * have been used is prepared as follows:
+     */
     for (i = 0; i < AV1_NUM_REF_FRAMES; i++)
         used_frame[i] = 0;
     used_frame[current->last_frame_idx] = 1;
     used_frame[current->golden_frame_idx] = 1;
 
+    /*
+     * An array shiftedOrderHints (containing the expected output order shifted
+     * such that the current frame has hint equal to curFrameHint) is prepared as follows:
+     */
     cur_frame_hint = 1 << (seq->order_hint_bits_minus_1);
     for (i = 0; i < AV1_NUM_REF_FRAMES; i++)
         shifted_order_hints[i] = cur_frame_hint +
@@ -762,6 +773,7 @@ static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
     latest_order_hint = shifted_order_hints[current->last_frame_idx];
     earliest_order_hint = shifted_order_hints[current->golden_frame_idx];
 
+    /* find_latest_backward */
     ref = -1;
     for (i = 0; i < AV1_NUM_REF_FRAMES; i++) {
         RK_S32 hint = shifted_order_hints[i];
@@ -771,11 +783,16 @@ static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
             latest_order_hint = hint;
         }
     }
+    /*
+     * The ALTREF_FRAME reference is set to be a backward reference to the frame
+     * with highest output order as follows:
+     */
     if (ref >= 0) {
         ref_frame_idx[AV1_REF_FRAME_ALTREF - AV1_REF_FRAME_LAST] = ref;
         used_frame[ref] = 1;
     }
 
+    /* find_earliest_backward */
     ref = -1;
     for (i = 0; i < AV1_NUM_REF_FRAMES; i++) {
         RK_S32 hint = shifted_order_hints[i];
@@ -785,6 +802,10 @@ static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
             earliest_order_hint = hint;
         }
     }
+    /*
+     * The BWDREF_FRAME reference is set to be a backward reference to
+     * the closest frame as follows:
+     */
     if (ref >= 0) {
         ref_frame_idx[AV1_REF_FRAME_BWDREF - AV1_REF_FRAME_LAST] = ref;
         used_frame[ref] = 1;
@@ -799,14 +820,24 @@ static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
             earliest_order_hint = hint;
         }
     }
+
+    /*
+     * The ALTREF2_FRAME reference is set to the next closest
+     * backward reference as follows:
+     */
     if (ref >= 0) {
         ref_frame_idx[AV1_REF_FRAME_ALTREF2 - AV1_REF_FRAME_LAST] = ref;
         used_frame[ref] = 1;
     }
 
+    /*
+     * The remaining references are set to be forward references
+     * in anti-chronological order as follows:
+     */
     for (i = 0; i < AV1_REFS_PER_FRAME - 2; i++) {
         RK_S32 ref_frame = ref_frame_list[i];
         if (ref_frame_idx[ref_frame - AV1_REF_FRAME_LAST] < 0 ) {
+            /* find_latest_forward */
             ref = -1;
             for (j = 0; j < AV1_NUM_REF_FRAMES; j++) {
                 RK_S32 hint = shifted_order_hints[j];
@@ -823,6 +854,10 @@ static RK_S32 mpp_av1_set_frame_refs(AV1Context *ctx, BitReadCtx_t *gb,
         }
     }
 
+    /*
+     * Finally, any remaining references are set to the reference
+     * frame with smallest output order as follows:
+     */
     ref = -1;
     for (i = 0; i < AV1_NUM_REF_FRAMES; i++) {
         RK_S32 hint = shifted_order_hints[i];
@@ -1270,6 +1305,10 @@ static RK_S32 mpp_av1_loop_filter_params(AV1Context *ctx, BitReadCtx_t *gb,
         }
     }
 
+    av1d_dbg(AV1D_DBG_HEADER, "orderhint %d loop_filter_level %d %d %d %d\n",
+             current->order_hint,
+             current->loop_filter_level[0], current->loop_filter_level[1],
+             current->loop_filter_level[2], current->loop_filter_level[3]);
     fb(3, loop_filter_sharpness);
 
     flag(loop_filter_delta_enabled);
@@ -1397,13 +1436,11 @@ static RK_S32 mpp_av1_read_tx_mode(AV1Context *ctx, BitReadCtx_t *gb,
 
     if (ctx->coded_lossless)
         infer(tx_mode, 0);
-    else
-        increment(tx_mode, 1, 2);
-    if (current->tx_mode == 1) {
-        current->tx_mode = 3;
-    } else {
-        current->tx_mode = 4;
+    else {
+        flag(tx_mode);
+        current->tx_mode = current->tx_mode ? 4 : 3;
     }
+
     return 0;
 }
 
@@ -1534,6 +1571,10 @@ static RK_S32 mpp_av1_global_motion_param(AV1Context *ctx, BitReadCtx_t *gb,
     return 0;
 }
 
+/*
+ * Actual gm_params value is not reconstructed here.
+ * Real gm_params update in av1d_parser.c->global_motion_params()
+ */
 static RK_S32 mpp_av1_global_motion_params(AV1Context *ctx, BitReadCtx_t *gb,
                                            AV1RawFrameHeader *current)
 {
@@ -1575,12 +1616,6 @@ static RK_S32 mpp_av1_global_motion_params(AV1Context *ctx, BitReadCtx_t *gb,
             CHECK(mpp_av1_global_motion_param(ctx, gb, current, type, ref, 1));
         }
     }
-    /* // update alpha..
-    if (params->wmtype <= AFFINE) {
-        int good_shear_params = get_shear_params(params);
-        if (!good_shear_params) return 0;
-    }
-     */
 
     return 0;
 }
@@ -1697,8 +1732,6 @@ static RK_S32 mpp_av1_uncompressed_header(AV1Context *ctx, BitReadCtx_t *gb,
     const AV1RawSequenceHeader *seq;
     RK_S32 id_len, diff_len, all_frames, frame_is_intra, order_hint_bits;
     RK_S32 i, err;
-
-    RK_S32 start_pos = mpp_get_bits_count(gb);
 
     if (!ctx->sequence_header) {
         mpp_err_f("No sequence header available: "
@@ -2066,8 +2099,6 @@ static RK_S32 mpp_av1_uncompressed_header(AV1Context *ctx, BitReadCtx_t *gb,
     av1d_dbg(AV1D_DBG_HEADER, "grain in %d", mpp_get_bits_count(gb));
     CHECK(mpp_av1_film_grain_params(ctx, gb, &current->film_grain, current));
     av1d_dbg(AV1D_DBG_HEADER, "film_grain out %d", mpp_get_bits_count(gb));
-    ctx->frame_tag_size = ((mpp_get_bits_count(gb) - start_pos) + 7) / 8;
-
 
     av1d_dbg(AV1D_DBG_REF, "Frame %d:  size %dx%d  "
              "upscaled %d  render %dx%d  subsample %dx%d  "
@@ -2155,14 +2186,14 @@ static RK_S32 mpp_av1_frame_header_obu(AV1Context *ctx, BitReadCtx_t *gb,
             fh_start = (RK_U8*)gb->buf + start_pos / 8;
 
             fh_bytes = (fh_bits + 7) / 8;
-
             ctx->frame_header_size = fh_bits;
             MPP_FREE(ctx->frame_header);
-
             ctx->frame_header =
                 mpp_malloc(RK_U8, fh_bytes + BUFFER_PADDING_SIZE);
-            if (!ctx->frame_header)
+            if (!ctx->frame_header) {
+                mpp_err_f("frame header malloc failed\n");
                 return MPP_ERR_NOMEM;
+            }
             memcpy(ctx->frame_header, fh_start, fh_bytes);
         }
     }
@@ -2175,7 +2206,6 @@ static RK_S32 mpp_av1_tile_group_obu(AV1Context *ctx, BitReadCtx_t *gb,
 {
     RK_S32 num_tiles, tile_bits;
     RK_S32 err;
-    RK_S32 cur_pos = mpp_get_bits_count(gb);
 
     num_tiles = ctx->tile_cols * ctx->tile_rows;
     if (num_tiles > 1)
@@ -2200,9 +2230,6 @@ static RK_S32 mpp_av1_tile_group_obu(AV1Context *ctx, BitReadCtx_t *gb,
     // Reset header for next frame.
     if (current->tg_end == num_tiles - 1)
         ctx->seen_frame_header = 0;
-
-    ctx->frame_tag_size += MPP_ALIGN(mpp_get_bits_count(gb) - cur_pos, 8) / 8;
-
     // Tile data follows.
 
     return 0;
@@ -2213,6 +2240,7 @@ static RK_S32 mpp_av1_frame_obu(AV1Context *ctx, BitReadCtx_t *gb,
                                 void *rw_buffer_ref)
 {
     RK_S32 err;
+    RK_U32 start_pos = mpp_get_bits_count(gb);
 
     CHECK(mpp_av1_frame_header_obu(ctx, gb, &current->header,
                                    0, rw_buffer_ref));
@@ -2220,6 +2248,7 @@ static RK_S32 mpp_av1_frame_obu(AV1Context *ctx, BitReadCtx_t *gb,
     CHECK(mpp_av1_byte_alignment(ctx, gb));
 
     CHECK(mpp_av1_tile_group_obu(ctx, gb, &current->tile_group));
+    ctx->frame_tag_size += (mpp_get_bits_count(gb) - start_pos + 7) >> 3;
 
     return 0;
 }
@@ -2370,27 +2399,26 @@ static RK_S32 mpp_av1_get_dolby_rpu(AV1Context *ctx, BitReadCtx_t *gb)
         }
     }
 
-    if (hdr_dynamic_meta->data) {
-        RK_U32 i;
-        MppWriteCtx bit_ctx;
+    RK_U32 i;
+    MppWriteCtx bit_ctx;
 
-        mpp_writer_init(&bit_ctx, hdr_dynamic_meta->data, SZ_1K);
+    mpp_writer_init(&bit_ctx, hdr_dynamic_meta->data, SZ_1K);
 
-        mpp_writer_put_raw_bits(&bit_ctx, 0, 24);
-        mpp_writer_put_raw_bits(&bit_ctx, 1, 8);
-        mpp_writer_put_raw_bits(&bit_ctx, 0x19, 8);
-        for (i = 0; i < emdf_payload_size; i++) {
-            RK_U8 data;
+    mpp_writer_put_raw_bits(&bit_ctx, 0, 24);
+    mpp_writer_put_raw_bits(&bit_ctx, 1, 8);
+    mpp_writer_put_raw_bits(&bit_ctx, 0x19, 8);
+    for (i = 0; i < emdf_payload_size; i++) {
+        RK_U8 data;
 
-            READ_BITS(gb, 8, &data);
-            mpp_writer_put_bits(&bit_ctx, data, 8);
-        }
-
-        hdr_dynamic_meta->size = mpp_writer_bytes(&bit_ctx);
-        hdr_dynamic_meta->hdr_fmt = DOLBY;
-        av1d_dbg(AV1D_DBG_STRMIN, "dolby rpu size %d -> %d\n",
-                 emdf_payload_size, hdr_dynamic_meta->size);
+        READ_BITS(gb, 8, &data);
+        mpp_writer_put_bits(&bit_ctx, data, 8);
     }
+
+    hdr_dynamic_meta->size = mpp_writer_bytes(&bit_ctx);
+    hdr_dynamic_meta->hdr_fmt = DOLBY;
+    av1d_dbg(AV1D_DBG_STRMIN, "dolby rpu size %d -> %d\n",
+             emdf_payload_size, hdr_dynamic_meta->size);
+
     ctx->hdr_dynamic_meta = hdr_dynamic_meta;
     ctx->hdr_dynamic = 1;
     ctx->is_hdr = 1;
@@ -2494,7 +2522,7 @@ static RK_S32 mpp_av1_metadata_obu(AV1Context *ctx, BitReadCtx_t *gb,
     RK_S32 err;
 
     leb128(metadata_type);
-    av1d_dbg(AV1D_DBG_STRMIN, "%s meta type %d\n", __func__, current->metadata_type);
+    av1d_dbg(AV1D_DBG_STRMIN, "%s meta type %lld\n", __func__, current->metadata_type);
     switch (current->metadata_type) {
     case AV1_METADATA_TYPE_HDR_CLL:
         CHECK(mpp_av1_metadata_hdr_cll(ctx, gb, &current->metadata.hdr_cll));
@@ -2512,8 +2540,8 @@ static RK_S32 mpp_av1_metadata_obu(AV1Context *ctx, BitReadCtx_t *gb,
         CHECK(mpp_av1_metadata_timecode(ctx, gb, &current->metadata.timecode));
         break;
     default:
-        // Unknown metadata type.
-        return MPP_ERR_UNKNOW;
+        mpp_err_f("unknown metadata type %lld\n", current->metadata_type);
+        break;
     }
 
     return 0;
@@ -2678,7 +2706,6 @@ RK_S32 mpp_av1_split_fragment(AV1Context *ctx, Av1UnitFragment *frag, RK_S32 hea
         pos = mpp_get_bits_count(&gbc);
 
         mpp_assert(pos % 8 == 0 && pos / 8 <= (RK_S32)size);
-
         obu_length = pos / 8 + obu_size;
 
         if (size < obu_length) {
@@ -2718,8 +2745,7 @@ static RK_S32 mpp_av1_ref_tile_data(Av1ObuUnit *unit,
     // Must be byte-aligned at this point.
     mpp_assert(pos % 8 == 0);
 
-
-
+    td->offset    = pos / 8;
     td->data      = unit->data      + pos / 8;
     td->data_size = unit->data_size - pos / 8;
 
@@ -2775,7 +2801,8 @@ MPP_RET mpp_av1_read_unit(AV1Context *ctx, Av1ObuUnit *unit)
     }
 
     start_pos = mpp_get_bits_count(&gbc);
-    ctx->obu_len += ((start_pos - hdr_start_pos) >> 3);
+    if (!ctx->fist_tile_group)
+        ctx->frame_tag_size += ((start_pos - hdr_start_pos + 7) >> 3);
     if (obu->header.obu_extension_flag) {
         if (obu->header.obu_type != AV1_OBU_SEQUENCE_HEADER &&
             obu->header.obu_type != AV1_OBU_TEMPORAL_DELIMITER &&
@@ -2797,7 +2824,7 @@ MPP_RET mpp_av1_read_unit(AV1Context *ctx, Av1ObuUnit *unit)
                                           &obu->obu.sequence_header);
         if (err < 0)
             return err;
-
+        ctx->frame_tag_size += obu->obu_size;
         if (ctx->operating_point >= 0) {
             AV1RawSequenceHeader *sequence_header = &obu->obu.sequence_header;
 
@@ -2827,12 +2854,17 @@ MPP_RET mpp_av1_read_unit(AV1Context *ctx, Av1ObuUnit *unit)
                                        NULL);
         if (err < 0)
             return err;
+        ctx->frame_tag_size += obu->obu_size;
     } break;
     case AV1_OBU_TILE_GROUP: {
+        RK_U32 cur_pos = mpp_get_bits_count(&gbc);
+
         err = mpp_av1_tile_group_obu(ctx, &gbc, &obu->obu.tile_group);
         if (err < 0)
             return err;
-
+        if (!ctx->fist_tile_group)
+            ctx->frame_tag_size += MPP_ALIGN(mpp_get_bits_count(&gbc) - cur_pos, 8) / 8;
+        ctx->fist_tile_group = 1;
         err = mpp_av1_ref_tile_data(unit, &gbc,
                                     &obu->obu.tile_group.tile_data);
         if (err < 0)
@@ -2860,6 +2892,7 @@ MPP_RET mpp_av1_read_unit(AV1Context *ctx, Av1ObuUnit *unit)
             return err;
     } break;
     case AV1_OBU_METADATA: {
+        ctx->frame_tag_size += obu->obu_size;
         err = mpp_av1_metadata_obu(ctx, &gbc, &obu->obu.metadata);
         if (err < 0)
             return err;
@@ -2896,8 +2929,10 @@ MPP_RET mpp_av1_read_unit(AV1Context *ctx, Av1ObuUnit *unit)
 RK_S32 mpp_av1_read_fragment_content(AV1Context *ctx, Av1UnitFragment *frag)
 {
     int err, i, j;
-    ctx->obu_len = 0;
     AV1RawOBU *obu;
+
+    ctx->frame_tag_size = 0;
+    ctx->fist_tile_group = 0;
     for (i = 0; i < frag->nb_units; i++) {
         Av1ObuUnit *unit = &frag->units[i];
         if (ctx->unit_types) {
@@ -2927,12 +2962,7 @@ RK_S32 mpp_av1_read_fragment_content(AV1Context *ctx, Av1UnitFragment *frag)
         obu = unit->content;
         av1d_dbg(AV1D_DBG_HEADER, "obu->header.obu_type %d, obu->obu_size = %d ctx->frame_tag_size %d",
                  obu->header.obu_type, obu->obu_size, ctx->frame_tag_size);
-        if ((obu->header.obu_type != AV1_OBU_FRAME) &&
-            (obu->header.obu_type != AV1_OBU_TILE_GROUP)) {
-            ctx->obu_len +=  obu->obu_size;
-        }
     }
-    ctx->frame_tag_size += ctx->obu_len;
     return 0;
 }
 

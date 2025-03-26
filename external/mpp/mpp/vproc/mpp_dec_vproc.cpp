@@ -29,7 +29,7 @@
 #include "iep_api.h"
 #include "iep2_api.h"
 
-#define DUMP_FILE 0
+#define DUMP_FILE 1
 
 #define dec_vproc_dbg(flag, fmt, ...) \
     do { \
@@ -44,6 +44,8 @@
 #define VPROC_DBG_FUNCTION      (0x00000001)
 #define VPROC_DBG_STATUS        (0x00000002)
 #define VPROC_DBG_RESET         (0x00000004)
+#define VPROC_DBG_DUMP_IN       (0x00000010)
+#define VPROC_DBG_DUMP_OUT      (0x00000020)
 
 #define vproc_dbg_func(fmt, ...)  \
     vproc_dbg_f(VPROC_DBG_FUNCTION, fmt, ## __VA_ARGS__);
@@ -364,7 +366,8 @@ static void dec_vproc_set_dei_v2(MppDecVprocCtxImpl *ctx, MppFrame frm)
     // setup source IepImg
     dec_vproc_set_img_fmt(&img, frm);
 
-    dump_mppbuffer(buf, "/data/dump/dump_in.yuv", hor_stride, ver_stride);
+    if (vproc_debug & VPROC_DBG_DUMP_IN)
+        dump_mppbuffer(buf, "/data/dump/dump_in.yuv", hor_stride, ver_stride);
 
     if (ctx->prev_frm1 && ctx->prev_frm0) {
 
@@ -447,20 +450,38 @@ static void dec_vproc_set_dei_v2(MppDecVprocCtxImpl *ctx, MppFrame frm)
             if (ctx->pd_mode) {
                 if (ctx->dei_info.pd_flag != PD_COMP_FLAG_NON && ctx->dei_info.pd_types != PD_TYPES_UNKNOWN) {
                     dec_vproc_put_frame(mpp, frm, dst0, first_pts, frame_err);
-                    dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, ver_stride);
+                    if (vproc_debug & VPROC_DBG_DUMP_OUT)
+                        dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, ver_stride);
                     ctx->out_buf0 = NULL;
                 }
             } else {
-                if (mode & MPP_FRAME_FLAG_TOP_FIRST) {
+                RK_U32 fo_from_syntax = (mode & MPP_FRAME_FLAG_TOP_FIRST) ? 1 : 0;
+                RK_U32 fo_from_iep = (ctx->dei_info.dil_order == IEP2_FIELD_ORDER_TFF);
+                RK_U32 is_tff = 0;
+
+                if (fo_from_iep != fo_from_syntax) {
+                    if (ctx->dei_info.dil_order_confidence_ratio > 30)
+                        is_tff = fo_from_iep;
+                    else
+                        is_tff = fo_from_iep;
+                } else {
+                    is_tff = fo_from_syntax;
+                }
+
+                if (is_tff) {
                     dec_vproc_put_frame(mpp, frm, dst0, first_pts, frame_err);
-                    dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, ver_stride);
+                    if (vproc_debug & VPROC_DBG_DUMP_OUT)
+                        dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, ver_stride);
                     dec_vproc_put_frame(mpp, frm, dst1, curr_pts, frame_err);
-                    dump_mppbuffer(dst1, "/data/dump/dump_output.yuv", hor_stride, ver_stride);
+                    if (vproc_debug & VPROC_DBG_DUMP_OUT)
+                        dump_mppbuffer(dst1, "/data/dump/dump_output.yuv", hor_stride, ver_stride);
                 } else {
                     dec_vproc_put_frame(mpp, frm, dst1, first_pts, frame_err);
-                    dump_mppbuffer(dst1, "/data/dump/dump_output.yuv", hor_stride, mpp_frame_get_height(frm));
+                    if (vproc_debug & VPROC_DBG_DUMP_OUT)
+                        dump_mppbuffer(dst1, "/data/dump/dump_output.yuv", hor_stride, mpp_frame_get_height(frm));
                     dec_vproc_put_frame(mpp, frm, dst0, curr_pts, frame_err);
-                    dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, mpp_frame_get_height(frm));
+                    if (vproc_debug & VPROC_DBG_DUMP_OUT)
+                        dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, mpp_frame_get_height(frm));
                 }
                 ctx->out_buf0 = NULL;
                 ctx->out_buf1 = NULL;
@@ -475,6 +496,18 @@ static void dec_vproc_set_dei_v2(MppDecVprocCtxImpl *ctx, MppFrame frm)
         } else {
             ctx->pd_mode = 1;
             ctx->detection = 0;
+        }
+    } else if (ctx->prev_frm0 && ! ctx->prev_frm1) {
+        vproc_dbg_status("Wait for next frame to turn into I5O2");
+
+        if (ctx->out_buf0) {
+            mpp_buffer_put(ctx->out_buf0);
+            ctx->out_buf0 = NULL;
+        }
+
+        if (ctx->out_buf1) {
+            mpp_buffer_put(ctx->out_buf1);
+            ctx->out_buf1 = NULL;
         }
     } else {
         struct iep2_api_params params;
@@ -516,7 +549,8 @@ static void dec_vproc_set_dei_v2(MppDecVprocCtxImpl *ctx, MppFrame frm)
         dec_vproc_start_dei(ctx, mode);
         if (!ctx->detection) {
             dec_vproc_put_frame(mpp, frm, dst0, -1, frame_err);
-            dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, mpp_frame_get_height(frm));
+            if (vproc_debug & VPROC_DBG_DUMP_OUT)
+                dump_mppbuffer(dst0, "/data/dump/dump_output.yuv", hor_stride, mpp_frame_get_height(frm));
             ctx->out_buf0 = NULL;
         }
     }
@@ -559,22 +593,6 @@ static void dec_vproc_update_ref(MppDecVprocCtxImpl *ctx, MppFrame frm, RK_U32 i
     return;
 }
 
-static void dev_vproc_reset(MppThread *thd, MppDecVprocCtxImpl *ctx)
-{
-    AutoMutex autolock_reset(thd->mutex(THREAD_CONTROL));
-
-    if (ctx->reset) {
-        vproc_dbg_reset("reset start\n");
-        dec_vproc_clr_prev(ctx);
-
-        ctx->reset = 0;
-        sem_post(&ctx->reset_sem);
-        ctx->task_status.val = 0;
-        ctx->task_wait.val = 0;
-        vproc_dbg_reset("reset done\n");
-    }
-}
-
 static void *dec_vproc_thread(void *data)
 {
     MppDecVprocCtxImpl *ctx = (MppDecVprocCtxImpl *)data;
@@ -599,12 +617,6 @@ static void *dec_vproc_thread(void *data)
             if (MPP_THREAD_RUNNING != thd->get_status())
                 break;
 
-            if (ctx->task_wait.task_in) {
-                if (ctx->reset) {
-                    goto RESET;
-                }
-            }
-
             if (ctx->task_wait.val && !ctx->reset) {
                 vproc_dbg_status("vproc thread wait %d", ctx->task_wait.val);
                 thd->wait();
@@ -612,6 +624,19 @@ static void *dec_vproc_thread(void *data)
 
             if (!ctx->task_status.task_rdy) {
                 if (hal_task_get_hnd(tasks, TASK_PROCESSING, &task)) {
+                    if (ctx->reset) {
+                        /* reset only on all task finished */
+                        vproc_dbg_reset("reset start\n");
+
+                        dec_vproc_clr_prev(ctx);
+                        ctx->reset = 0;
+                        sem_post(&ctx->reset_sem);
+                        ctx->task_wait.val = 0;
+
+                        vproc_dbg_reset("reset done\n");
+                        continue;
+                    }
+
                     ctx->task_wait.task_in = 1;
                     continue;
                 }
@@ -695,8 +720,6 @@ static void *dec_vproc_thread(void *data)
 
             vproc_dbg_status("vproc task done");
         }
-    RESET:
-        dev_vproc_reset(thd, ctx);
     }
     mpp_dbg_info("mpp_dec_post_proc_thread exited\n");
 
@@ -927,9 +950,7 @@ MPP_RET dec_vproc_reset(MppDecVprocCtx ctx)
         vproc_dbg_reset("reset contorl start\n");
         // wait reset finished
         thd->lock();
-        thd->lock(THREAD_CONTROL);
         p->reset = 1;
-        thd->unlock(THREAD_CONTROL);
         thd->signal();
         thd->unlock();
 

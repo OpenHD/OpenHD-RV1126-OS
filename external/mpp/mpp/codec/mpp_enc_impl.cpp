@@ -77,6 +77,11 @@ static RK_U8 uuid_debug_info[16] = {
     0xa9, 0x06, 0xae, 0x29, 0x94, 0x11, 0xcd, 0x9a
 };
 
+RK_U8 uuid_refresh_cfg[16] = {
+    0x72, 0x65, 0x63, 0x6f, 0x76, 0x65, 0x72, 0x79,
+    0x5f, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x00, 0x00
+};
+
 static void reset_hal_enc_task(HalEncTask *task)
 {
     memset(task, 0, sizeof(*task));
@@ -192,14 +197,17 @@ static MPP_RET check_enc_task_wait(MppEncImpl *enc, EncAsyncWait *wait)
     RK_U32 last_wait = enc->status_flag;
     RK_U32 curr_wait = wait->val;
     RK_U32 wait_chg  = last_wait & (~curr_wait);
+    RK_U32 keep_notify = 0;
 
     do {
         if (enc->reset_flag)
             break;
 
         // NOTE: User control should always be processed
-        if (notify & MPP_ENC_CONTROL)
+        if (notify & MPP_ENC_CONTROL) {
+            keep_notify = notify & (~MPP_ENC_CONTROL);
             break;
+        }
 
         // NOTE: When condition is not fulfilled check nofify flag again
         if (!curr_wait || (curr_wait & notify))
@@ -212,7 +220,7 @@ static MPP_RET check_enc_task_wait(MppEncImpl *enc, EncAsyncWait *wait)
                    last_wait, curr_wait, wait_chg, notify, (ret) ? ("wait") : ("work"));
 
     enc->status_flag = wait->val;
-    enc->notify_flag = 0;
+    enc->notify_flag = keep_notify;
 
     if (ret) {
         enc->wait_count++;
@@ -562,8 +570,19 @@ MPP_RET mpp_enc_proc_rc_cfg(MppCodingType coding, MppEncRcCfg *dst, MppEncRcCfg 
             dst->fps_out_denorm = src->fps_out_denorm;
         }
 
-        if (change & MPP_ENC_RC_CFG_CHANGE_GOP)
+        if (change & MPP_ENC_RC_CFG_CHANGE_GOP) {
+            /*
+             * If GOP is changed smaller, disable Intra-Refresh
+             * and User level should reconfig Intra-Refresh
+             */
+            if (dst->gop < src->gop && dst->refresh_en) {
+                dst->refresh_en = 0;
+            }
             dst->gop = src->gop;
+        }
+
+        if (change & MPP_ENC_RC_CFG_CHANGE_GOP_REF_CFG)
+            dst->ref_cfg = src->ref_cfg;
 
         if (change & MPP_ENC_RC_CFG_CHANGE_MAX_REENC)
             dst->max_reenc_times = src->max_reenc_times;
@@ -634,6 +653,13 @@ MPP_RET mpp_enc_proc_rc_cfg(MppCodingType coding, MppEncRcCfg *dst, MppEncRcCfg 
         if (change & MPP_ENC_RC_CFG_CHANGE_QP_VI)
             dst->qp_delta_vi = src->qp_delta_vi;
 
+        if (change & MPP_ENC_RC_CFG_CHANGE_FQP) {
+            dst->fqp_min_i = src->fqp_min_i;
+            dst->fqp_min_p = src->fqp_min_p;
+            dst->fqp_max_i = src->fqp_max_i;
+            dst->fqp_max_p = src->fqp_max_p;
+        }
+
         if (change & MPP_ENC_RC_CFG_CHANGE_HIER_QP) {
             dst->hier_qp_en = src->hier_qp_en;
             memcpy(dst->hier_qp_delta, src->hier_qp_delta, sizeof(src->hier_qp_delta));
@@ -642,6 +668,17 @@ MPP_RET mpp_enc_proc_rc_cfg(MppCodingType coding, MppEncRcCfg *dst, MppEncRcCfg 
 
         if (change & MPP_ENC_RC_CFG_CHANGE_ST_TIME)
             dst->stats_time = src->stats_time;
+
+        if (change & MPP_ENC_RC_CFG_CHANGE_REFRESH) {
+            if (dst->debreath_en) {
+                mpp_err_f("Turn off Debreath first.");
+                ret = MPP_ERR_VALUE;
+            }
+            dst->refresh_en = src->refresh_en;
+            dst->refresh_mode = src->refresh_mode;
+            // Make sure refresh_num is legal
+            dst->refresh_num = src->refresh_num;
+        }
 
         // parameter checking
         if (dst->rc_mode >= MPP_ENC_RC_MODE_BUTT) {
@@ -770,6 +807,15 @@ MPP_RET mpp_enc_proc_hw_cfg(MppEncHwCfg *dst, MppEncHwCfg *src)
         if (change & MPP_ENC_HW_CFG_CHANGE_AQ_STEP_P)
             memcpy(dst->aq_step_p, src->aq_step_p, sizeof(dst->aq_step_p));
 
+        if (change & MPP_ENC_HW_CFG_CHANGE_QBIAS_I)
+            dst->qbias_i = src->qbias_i;
+
+        if (change & MPP_ENC_HW_CFG_CHANGE_QBIAS_P)
+            dst->qbias_p = src->qbias_p;
+
+        if (change & MPP_ENC_HW_CFG_CHANGE_QBIAS_EN)
+            dst->qbias_en = src->qbias_en;
+
         if (change & MPP_ENC_HW_CFG_CHANGE_MB_RC)
             dst->mb_rc_disable = src->mb_rc_disable;
 
@@ -828,6 +874,36 @@ MPP_RET mpp_enc_proc_tune_cfg(MppEncFineTuneCfg *dst, MppEncFineTuneCfg *src)
     return ret;
 }
 
+static MPP_RET mpp_enc_control_set_ref_cfg(MppEncImpl *enc, void *param)
+{
+    MPP_RET ret = MPP_OK;
+    MppEncRefCfg src = (MppEncRefCfg)param;
+    MppEncRefCfg dst = enc->cfg.ref_cfg;
+
+    if (NULL == src)
+        src = mpp_enc_ref_default();
+
+    if (NULL == dst) {
+        mpp_enc_ref_cfg_init(&dst);
+        enc->cfg.ref_cfg = dst;
+    }
+
+    ret = mpp_enc_ref_cfg_copy(dst, src);
+    if (ret) {
+        mpp_err_f("failed to copy ref cfg ret %d\n", ret);
+    }
+
+    ret = mpp_enc_refs_set_cfg(enc->refs, dst);
+    if (ret) {
+        mpp_err_f("failed to set ref cfg ret %d\n", ret);
+    }
+
+    if (mpp_enc_refs_update_hdr(enc->refs))
+        enc->hdr_status.val = 0;
+
+    return ret;
+}
+
 MPP_RET mpp_enc_proc_cfg(MppEncImpl *enc, MpiCmd cmd, void *param)
 {
     MPP_RET ret = MPP_OK;
@@ -837,6 +913,7 @@ MPP_RET mpp_enc_proc_cfg(MppEncImpl *enc, MpiCmd cmd, void *param)
         MppEncCfgImpl *impl = (MppEncCfgImpl *)param;
         MppEncCfgSet *src = &impl->cfg;
         RK_U32 change = src->base.change;
+        MPP_RET ret_tmp = MPP_OK;
 
         /* get base cfg here */
         if (change) {
@@ -850,29 +927,48 @@ MPP_RET mpp_enc_proc_cfg(MppEncImpl *enc, MpiCmd cmd, void *param)
 
         /* process rc cfg at mpp_enc module */
         if (src->rc.change) {
-            ret = mpp_enc_proc_rc_cfg(enc->coding, &enc->cfg.rc, &src->rc);
+            ret_tmp = mpp_enc_proc_rc_cfg(enc->coding, &enc->cfg.rc, &src->rc);
+            if (ret_tmp != MPP_OK)
+                ret = ret_tmp;
+            // update ref cfg
+            if ((enc->cfg.rc.change & MPP_ENC_RC_CFG_CHANGE_GOP_REF_CFG) &&
+                (enc->cfg.rc.gop > 0))
+                mpp_enc_control_set_ref_cfg(enc, enc->cfg.rc.ref_cfg);
+
             src->rc.change = 0;
         }
 
         /* process hardware cfg at mpp_enc module */
         if (src->hw.change) {
-            ret = mpp_enc_proc_hw_cfg(&enc->cfg.hw, &src->hw);
+            ret_tmp = mpp_enc_proc_hw_cfg(&enc->cfg.hw, &src->hw);
+            if (ret_tmp != MPP_OK)
+                ret = ret_tmp;
             src->hw.change = 0;
         }
 
         /* process hardware cfg at mpp_enc module */
         if (src->tune.change) {
-            ret = mpp_enc_proc_tune_cfg(&enc->cfg.tune, &src->tune);
+            ret_tmp = mpp_enc_proc_tune_cfg(&enc->cfg.tune, &src->tune);
+            if (ret_tmp != MPP_OK)
+                ret = ret_tmp;
             src->tune.change = 0;
         }
 
         /* Then process the rest config */
-        ret = enc_impl_proc_cfg(enc->impl, cmd, param);
+        ret_tmp = enc_impl_proc_cfg(enc->impl, cmd, param);
+        if (ret_tmp != MPP_OK)
+            ret = ret_tmp;
     } break;
     case MPP_ENC_SET_RC_CFG : {
         MppEncRcCfg *src = (MppEncRcCfg *)param;
-        if (src)
+        if (src) {
             ret = mpp_enc_proc_rc_cfg(enc->coding, &enc->cfg.rc, src);
+
+            // update ref cfg
+            if ((enc->cfg.rc.change & MPP_ENC_RC_CFG_CHANGE_GOP_REF_CFG) &&
+                (enc->cfg.rc.gop > 0))
+                mpp_enc_control_set_ref_cfg(enc, enc->cfg.rc.ref_cfg);
+        }
     } break;
     case MPP_ENC_SET_IDR_FRAME : {
         enc->frm_cfg.force_idr++;
@@ -974,29 +1070,7 @@ MPP_RET mpp_enc_proc_cfg(MppEncImpl *enc, MpiCmd cmd, void *param)
         }
     } break;
     case MPP_ENC_SET_REF_CFG : {
-        MppEncRefCfg src = (MppEncRefCfg)param;
-        MppEncRefCfg dst = enc->cfg.ref_cfg;
-
-        if (NULL == src)
-            src = mpp_enc_ref_default();
-
-        if (NULL == dst) {
-            mpp_enc_ref_cfg_init(&dst);
-            enc->cfg.ref_cfg = dst;
-        }
-
-        ret = mpp_enc_ref_cfg_copy(dst, src);
-        if (ret) {
-            mpp_err_f("failed to copy ref cfg ret %d\n", ret);
-        }
-
-        ret = mpp_enc_refs_set_cfg(enc->refs, dst);
-        if (ret) {
-            mpp_err_f("failed to set ref cfg ret %d\n", ret);
-        }
-
-        if (mpp_enc_refs_update_hdr(enc->refs))
-            enc->hdr_status.val = 0;
+        ret = mpp_enc_control_set_ref_cfg(enc, param);
     } break;
     case MPP_ENC_SET_OSD_PLT_CFG : {
         MppEncOSDPltCfg *src = (MppEncOSDPltCfg *)param;
@@ -1040,6 +1114,9 @@ MPP_RET mpp_enc_proc_cfg(MppEncImpl *enc, MpiCmd cmd, void *param)
         enc->rc_status.rc_api_user_cfg = 1;
     if (check_rc_gop_update(cmd, &enc->cfg))
         mpp_enc_refs_set_rc_igop(enc->refs, enc->cfg.rc.gop);
+
+    if (enc->cfg.rc.refresh_en)
+        mpp_enc_refs_set_refresh_length(enc->refs, enc->cfg.rc.refresh_length);
 
     if (check_hal_info_update(cmd))
         enc->hal_info_updated = 0;
@@ -1159,6 +1236,7 @@ static void set_rc_cfg(RcCfg *cfg, MppEncCfgSet *cfg_set)
     cfg->bps_target = rc->bps_target;
     cfg->bps_max    = rc->bps_max;
     cfg->bps_min    = rc->bps_min;
+    cfg->scene_mode = cfg_set->tune.scene_mode;
 
     cfg->hier_qp_cfg.hier_qp_en = rc->hier_qp_en;
     memcpy(cfg->hier_qp_cfg.hier_frame_num, rc->hier_frame_num, sizeof(rc->hier_frame_num));
@@ -1180,6 +1258,10 @@ static void set_rc_cfg(RcCfg *cfg, MppEncCfgSet *cfg_set)
         cfg->min_i_quality = rc->qp_min_i ? rc->qp_min_i : rc->qp_min;
         cfg->i_quality_delta = rc->qp_delta_ip;
         cfg->vi_quality_delta = rc->qp_delta_vi;
+        cfg->fqp_min_p = rc->fqp_min_p == INT_MAX ? cfg->min_quality : rc->fqp_min_p;
+        cfg->fqp_min_i = rc->fqp_min_i == INT_MAX ? cfg->min_i_quality : rc->fqp_min_i;
+        cfg->fqp_max_p = rc->fqp_max_p == INT_MAX ? cfg->max_quality : rc->fqp_max_p;
+        cfg->fqp_max_i = rc->fqp_max_i == INT_MAX ? cfg->max_i_quality : rc->fqp_max_i;
     } break;
     case MPP_VIDEO_CodingMJPEG : {
         MppEncJpegCfg *jpeg = &codec->jpeg;
@@ -1189,6 +1271,10 @@ static void set_rc_cfg(RcCfg *cfg, MppEncCfgSet *cfg_set)
         cfg->min_quality = jpeg->qf_min;
         cfg->max_i_quality = jpeg->qf_max;
         cfg->min_i_quality = jpeg->qf_min;
+        cfg->fqp_min_i = 100 - jpeg->qf_max;
+        cfg->fqp_max_i = 100 - jpeg->qf_min;
+        cfg->fqp_min_p = 100 - jpeg->qf_max;
+        cfg->fqp_max_p = 100 - jpeg->qf_min;
     } break;
     default : {
         mpp_err_f("unsupport coding type %d\n", codec->coding);
@@ -1212,6 +1298,8 @@ static void set_rc_cfg(RcCfg *cfg, MppEncCfgSet *cfg_set)
 
     cfg->debreath_cfg.enable   = rc->debreath_en;
     cfg->debreath_cfg.strength = rc->debre_strength;
+
+    cfg->refresh_len = rc->refresh_length;
 
     if (info->st_gop) {
         cfg->vgop = info->st_gop;
@@ -1438,59 +1526,49 @@ static void mpp_enc_rc_info_backup(MppEncImpl *enc, EncAsyncTaskInfo *task)
     enc->rc_info_prev = task->rc.info;
 }
 
-static MPP_RET mpp_enc_normal(Mpp *mpp, EncAsyncTaskInfo *task)
+static void mpp_enc_add_sw_header(MppEncImpl *enc, HalEncTask *hal_task)
 {
-    MppEncImpl *enc = (MppEncImpl *)mpp->mEnc;
     EncImpl impl = enc->impl;
-    MppEncHal hal = enc->enc_hal;
-    EncRcTask *rc_task = &task->rc;
     MppEncHeaderStatus *hdr_status = &enc->hdr_status;
-    EncCpbStatus *cpb = &rc_task->cpb;
+    EncRcTask *rc_task = hal_task->rc_task;
     EncFrmStatus *frm = &rc_task->frm;
-    HalEncTask *hal_task = &task->task;
-    MppFrame frame = hal_task->frame;
     MppPacket packet = hal_task->packet;
-    MPP_RET ret = MPP_OK;
+    MppFrame frame = hal_task->frame;
 
-    if (enc->support_hw_deflicker && enc->cfg.rc.debreath_en) {
-        ret = mpp_enc_proc_two_pass(mpp, task);
-        if (ret)
-            return ret;
-    }
+    if (!(hdr_status->val & HDR_ADDED_MASK)) {
+        RK_U32 add_header = 0;
 
-    enc_dbg_detail("task %d enc proc dpb\n", frm->seq_idx);
-    mpp_enc_refs_get_cpb(enc->refs, cpb);
+        if (enc->hdr_mode == MPP_ENC_HEADER_MODE_EACH_IDR && frm->is_intra)
+            add_header |= 1;
 
-    enc_dbg_frm_status("frm %d start ***********************************\n", cpb->curr.seq_idx);
-    ENC_RUN_FUNC2(enc_impl_proc_dpb, impl, hal_task, mpp, ret);
+        if (enc->cfg.rc.refresh_en && frm->is_i_recovery && !frm->is_idr)
+            add_header |= 2;
 
-    enc_dbg_frm_status("frm %d compare\n", cpb->curr.seq_idx);
-    enc_dbg_frm_status("seq_idx      %d vs %d\n", frm->seq_idx, cpb->curr.seq_idx);
-    enc_dbg_frm_status("is_idr       %d vs %d\n", frm->is_idr, cpb->curr.is_idr);
-    enc_dbg_frm_status("is_intra     %d vs %d\n", frm->is_intra, cpb->curr.is_intra);
-    enc_dbg_frm_status("is_non_ref   %d vs %d\n", frm->is_non_ref, cpb->curr.is_non_ref);
-    enc_dbg_frm_status("is_lt_ref    %d vs %d\n", frm->is_lt_ref, cpb->curr.is_lt_ref);
-    enc_dbg_frm_status("lt_idx       %d vs %d\n", frm->lt_idx, cpb->curr.lt_idx);
-    enc_dbg_frm_status("temporal_id  %d vs %d\n", frm->temporal_id, cpb->curr.temporal_id);
-    enc_dbg_frm_status("frm %d done  ***********************************\n", cpb->curr.seq_idx);
+        if (add_header) {
+            enc_dbg_detail("task %d IDR header length %d\n",
+                           frm->seq_idx, enc->hdr_len);
 
-    enc_dbg_detail("task %d rc frame start\n", frm->seq_idx);
-    ENC_RUN_FUNC2(rc_frm_start, enc->rc_ctx, rc_task, mpp, ret);
+            mpp_packet_append(packet, enc->hdr_pkt);
 
-    // 16. generate header before hardware stream
-    if (enc->hdr_mode == MPP_ENC_HEADER_MODE_EACH_IDR &&
-        frm->is_intra &&
-        !hdr_status->added_by_change &&
-        !hdr_status->added_by_ctrl &&
-        !hdr_status->added_by_mode) {
-        enc_dbg_detail("task %d IDR header length %d\n",
-                       frm->seq_idx, enc->hdr_len);
+            hal_task->header_length = enc->hdr_len;
+            hal_task->length += enc->hdr_len;
+            hdr_status->added_by_mode = 1;
+        }
 
-        mpp_packet_append(packet, enc->hdr_pkt);
+        if ((add_header & 2) && enc->sei_mode >= MPP_ENC_SEI_MODE_ONE_SEQ) {
+            RK_S32 length = 0;
 
-        hal_task->header_length = enc->hdr_len;
-        hal_task->length += enc->hdr_len;
-        hdr_status->added_by_mode = 1;
+            enc_impl_add_prefix(impl, packet, &length, uuid_refresh_cfg,
+                                &enc->cfg.rc.refresh_length, 0);
+
+            if (length) {
+                enc_dbg_detail("task %d refresh header length %d\n",
+                               frm->seq_idx, enc->hdr_len);
+
+                hal_task->sei_length += length;
+                hal_task->length += length;
+            }
+        }
     }
 
     // check for header adding
@@ -1520,6 +1598,46 @@ static MPP_RET mpp_enc_normal(Mpp *mpp, EncAsyncTaskInfo *task)
 
     // check for user data adding
     check_hal_task_pkt_len(hal_task, "user data adding");
+}
+
+static MPP_RET mpp_enc_normal(Mpp *mpp, EncAsyncTaskInfo *task)
+{
+    MppEncImpl *enc = (MppEncImpl *)mpp->mEnc;
+    EncImpl impl = enc->impl;
+    MppEncHal hal = enc->enc_hal;
+    EncRcTask *rc_task = &task->rc;
+    EncCpbStatus *cpb = &rc_task->cpb;
+    EncFrmStatus *frm = &rc_task->frm;
+    HalEncTask *hal_task = &task->task;
+    MPP_RET ret = MPP_OK;
+
+    if (enc->support_hw_deflicker && enc->cfg.rc.debreath_en) {
+        ret = mpp_enc_proc_two_pass(mpp, task);
+        if (ret)
+            return ret;
+    }
+
+    enc_dbg_detail("task %d enc proc dpb\n", frm->seq_idx);
+    mpp_enc_refs_get_cpb(enc->refs, cpb);
+
+    enc_dbg_frm_status("frm %d start ***********************************\n", cpb->curr.seq_idx);
+    ENC_RUN_FUNC2(enc_impl_proc_dpb, impl, hal_task, mpp, ret);
+
+    enc_dbg_frm_status("frm %d compare\n", cpb->curr.seq_idx);
+    enc_dbg_frm_status("seq_idx      %d vs %d\n", frm->seq_idx, cpb->curr.seq_idx);
+    enc_dbg_frm_status("is_idr       %d vs %d\n", frm->is_idr, cpb->curr.is_idr);
+    enc_dbg_frm_status("is_intra     %d vs %d\n", frm->is_intra, cpb->curr.is_intra);
+    enc_dbg_frm_status("is_non_ref   %d vs %d\n", frm->is_non_ref, cpb->curr.is_non_ref);
+    enc_dbg_frm_status("is_lt_ref    %d vs %d\n", frm->is_lt_ref, cpb->curr.is_lt_ref);
+    enc_dbg_frm_status("lt_idx       %d vs %d\n", frm->lt_idx, cpb->curr.lt_idx);
+    enc_dbg_frm_status("temporal_id  %d vs %d\n", frm->temporal_id, cpb->curr.temporal_id);
+    enc_dbg_frm_status("frm %d done  ***********************************\n", cpb->curr.seq_idx);
+
+    enc_dbg_detail("task %d rc frame start\n", frm->seq_idx);
+    ENC_RUN_FUNC2(rc_frm_start, enc->rc_ctx, rc_task, mpp, ret);
+
+    // 16. generate header before hardware stream
+    mpp_enc_add_sw_header(enc, hal_task);
 
     enc_dbg_detail("task %d enc proc hal\n", frm->seq_idx);
     ENC_RUN_FUNC2(enc_impl_proc_hal, impl, hal_task, mpp, ret);
@@ -1900,12 +2018,10 @@ static MPP_RET try_proc_low_deley_task(Mpp *mpp, EncAsyncTaskInfo *task, EncAsyn
     EncImpl impl = enc->impl;
     MppEncHal hal = enc->enc_hal;
     EncRcTask *rc_task = &task->rc;
-    MppEncHeaderStatus *hdr_status = &enc->hdr_status;
     EncCpbStatus *cpb = &rc_task->cpb;
     EncFrmStatus *frm = &rc_task->frm;
     EncAsyncStatus *status = &task->status;
     HalEncTask *hal_task = &task->task;
-    MppFrame frame = hal_task->frame;
     MppPacket packet = hal_task->packet;
     MPP_RET ret = MPP_OK;
 
@@ -1925,48 +2041,7 @@ static MPP_RET try_proc_low_deley_task(Mpp *mpp, EncAsyncTaskInfo *task, EncAsyn
     ENC_RUN_FUNC2(rc_frm_start, enc->rc_ctx, rc_task, mpp, ret);
 
     // 16. generate header before hardware stream
-    if (enc->hdr_mode == MPP_ENC_HEADER_MODE_EACH_IDR &&
-        frm->is_intra &&
-        !hdr_status->added_by_change &&
-        !hdr_status->added_by_ctrl &&
-        !hdr_status->added_by_mode) {
-        enc_dbg_detail("task %d IDR header length %d\n",
-                       frm->seq_idx, enc->hdr_len);
-
-        mpp_packet_append(packet, enc->hdr_pkt);
-
-        hal_task->header_length = enc->hdr_len;
-        hal_task->length += enc->hdr_len;
-        hdr_status->added_by_mode = 1;
-    }
-
-    // check for header adding
-    check_hal_task_pkt_len(hal_task, "header adding");
-
-    /* 17. Add all prefix info before encoding */
-    if (frm->is_idr && enc->sei_mode >= MPP_ENC_SEI_MODE_ONE_SEQ) {
-        RK_S32 length = 0;
-
-        enc_impl_add_prefix(impl, packet, &length, uuid_version,
-                            enc->version_info, enc->version_length);
-
-        hal_task->sei_length += length;
-        hal_task->length += length;
-
-        length = 0;
-        enc_impl_add_prefix(impl, packet, &length, uuid_rc_cfg,
-                            enc->rc_cfg_info, enc->rc_cfg_length);
-
-        hal_task->sei_length += length;
-        hal_task->length += length;
-    }
-
-    if (mpp_frame_has_meta(frame)) {
-        update_user_datas(impl, packet, frame, hal_task);
-    }
-
-    // check for user data adding
-    check_hal_task_pkt_len(hal_task, "user data adding");
+    mpp_enc_add_sw_header(enc, hal_task);
 
     enc_dbg_detail("task %d enc proc hal\n", frm->seq_idx);
     ENC_RUN_FUNC2(enc_impl_proc_hal, impl, hal_task, mpp, ret);
@@ -2119,6 +2194,58 @@ TASK_DONE:
     return ret;
 }
 
+static MPP_RET set_enc_info_to_packet(MppEncImpl *enc, HalEncTask *hal_task)
+{
+    Mpp *mpp = (Mpp*)enc->mpp;
+    EncRcTask *rc_task = hal_task->rc_task;
+    EncFrmStatus *frm = &rc_task->frm;
+    MppPacket packet = hal_task->packet;
+    MppMeta meta = mpp_packet_get_meta(packet);
+
+    if (!meta) {
+        mpp_err_f("failed to get meta from packet\n");
+        return MPP_NOK;
+    }
+
+    if (enc->coding == MPP_VIDEO_CodingHEVC || enc->coding == MPP_VIDEO_CodingAVC) {
+        RK_U32 is_pskip = !(rc_task->info.lvl64_inter_num ||
+                            rc_task->info.lvl32_inter_num ||
+                            rc_task->info.lvl16_inter_num ||
+                            rc_task->info.lvl8_inter_num  ||
+                            rc_task->info.lvl32_intra_num ||
+                            rc_task->info.lvl16_intra_num ||
+                            rc_task->info.lvl8_intra_num  ||
+                            rc_task->info.lvl4_intra_num);
+
+        /* num of inter different size predicted block */
+        mpp_meta_set_s32(meta, KEY_LVL64_INTER_NUM, rc_task->info.lvl64_inter_num);
+        mpp_meta_set_s32(meta, KEY_LVL32_INTER_NUM, rc_task->info.lvl32_inter_num);
+        mpp_meta_set_s32(meta, KEY_LVL16_INTER_NUM, rc_task->info.lvl16_inter_num);
+        mpp_meta_set_s32(meta, KEY_LVL8_INTER_NUM,  rc_task->info.lvl8_inter_num);
+        /* num of intra different size predicted block */
+        mpp_meta_set_s32(meta, KEY_LVL32_INTRA_NUM, rc_task->info.lvl32_intra_num);
+        mpp_meta_set_s32(meta, KEY_LVL16_INTRA_NUM, rc_task->info.lvl16_intra_num);
+        mpp_meta_set_s32(meta, KEY_LVL8_INTRA_NUM,  rc_task->info.lvl8_intra_num);
+        mpp_meta_set_s32(meta, KEY_LVL4_INTRA_NUM,  rc_task->info.lvl4_intra_num);
+
+        mpp_meta_set_s64(meta, KEY_ENC_SSE,  rc_task->info.sse);
+        /* frame type */
+        mpp_meta_set_s32(meta, KEY_OUTPUT_INTRA,    frm->is_intra);
+        mpp_meta_set_s32(meta, KEY_OUTPUT_PSKIP,    frm->force_pskip || is_pskip);
+    }
+    /* start qp and average qp */
+    mpp_meta_set_s32(meta, KEY_ENC_START_QP,    rc_task->info.quality_target);
+    mpp_meta_set_s32(meta, KEY_ENC_AVERAGE_QP,  rc_task->info.quality_real);
+
+    if (hal_task->md_info)
+        mpp_meta_set_buffer(meta, KEY_MOTION_INFO, hal_task->md_info);
+
+    if (mpp->mEncAyncIo)
+        mpp_meta_set_frame(meta, KEY_INPUT_FRAME, hal_task->frame);
+
+    return MPP_OK;
+}
+
 static MPP_RET try_proc_normal_task(MppEncImpl *enc, EncAsyncTaskInfo *task)
 {
     Mpp *mpp = (Mpp*)enc->mpp;
@@ -2153,7 +2280,7 @@ static MPP_RET try_proc_normal_task(MppEncImpl *enc, EncAsyncTaskInfo *task)
             mpp_enc_reenc_force_pskip(mpp, task);
             break;
         }
-
+        frm->force_pskip = 0;
         mpp_enc_reenc_simple(mpp, task);
     }
     enc_dbg_detail("task %d rc frame end\n", frm->seq_idx);
@@ -2178,20 +2305,14 @@ TASK_DONE:
         mpp_packet_set_length(packet, hal_task->length);
     }
 
-    {
-        MppMeta meta = mpp_packet_get_meta(packet);
-
-        if (hal_task->md_info)
-            mpp_meta_set_buffer(meta, KEY_MOTION_INFO, hal_task->md_info);
-
-        mpp_meta_set_s32(meta, KEY_OUTPUT_INTRA, frm->is_intra);
-        if (rc_task->info.quality_real)
-            mpp_meta_set_s32(meta, KEY_ENC_AVERAGE_QP, rc_task->info.quality_real);
-
-        if (mpp->mEncAyncIo)
-            mpp_meta_set_frame(meta, KEY_INPUT_FRAME, enc->frame);
-    }
-
+    /* enc failed force idr */
+    if (ret) {
+        enc->frm_cfg.force_flag |= ENC_FORCE_IDR;
+        enc->hdr_status.val = 0;
+        mpp_packet_set_length(packet, 0);
+        mpp_err_f("enc failed force idr!\n");
+    } else
+        set_enc_info_to_packet(enc, hal_task);
     /*
      * First return output packet.
      * Then enqueue task back to input port.
@@ -2719,14 +2840,12 @@ static MPP_RET proc_async_task(MppEncImpl *enc)
     Mpp *mpp = (Mpp*)enc->mpp;
     EncImpl impl = enc->impl;
     MppEncHal hal = enc->enc_hal;
-    MppEncHeaderStatus *hdr_status = &enc->hdr_status;
     EncAsyncTaskInfo *async = enc->async;
     EncAsyncStatus *status = &async->status;
     HalEncTask *hal_task = &async->task;
     EncRcTask *rc_task = hal_task->rc_task;
     EncCpbStatus *cpb = &rc_task->cpb;
     EncFrmStatus *frm = &rc_task->frm;
-    MppPacket packet = hal_task->packet;
     RK_U32 seq_idx = async->seq_idx;
     MPP_RET ret = MPP_OK;
 
@@ -2745,48 +2864,7 @@ static MPP_RET proc_async_task(MppEncImpl *enc)
     ENC_RUN_FUNC2(rc_frm_start, enc->rc_ctx, rc_task, mpp, ret);
 
     // 16. generate header before hardware stream
-    if (enc->hdr_mode == MPP_ENC_HEADER_MODE_EACH_IDR &&
-        frm->is_intra &&
-        !hdr_status->added_by_change &&
-        !hdr_status->added_by_ctrl &&
-        !hdr_status->added_by_mode) {
-        enc_dbg_detail("task %d IDR header length %d\n",
-                       frm->seq_idx, enc->hdr_len);
-
-        mpp_packet_append(packet, enc->hdr_pkt);
-
-        hal_task->header_length = enc->hdr_len;
-        hal_task->length += enc->hdr_len;
-        hdr_status->added_by_mode = 1;
-    }
-
-    // check for header adding
-    check_hal_task_pkt_len(hal_task, "header adding");
-
-    /* 17. Add all prefix info before encoding */
-    if (frm->is_idr && enc->sei_mode >= MPP_ENC_SEI_MODE_ONE_SEQ) {
-        RK_S32 length = 0;
-
-        enc_impl_add_prefix(impl, packet, &length, uuid_version,
-                            enc->version_info, enc->version_length);
-
-        hal_task->sei_length += length;
-        hal_task->length += length;
-
-        length = 0;
-        enc_impl_add_prefix(impl, packet, &length, uuid_rc_cfg,
-                            enc->rc_cfg_info, enc->rc_cfg_length);
-
-        hal_task->sei_length += length;
-        hal_task->length += length;
-    }
-
-    if (mpp_frame_has_meta(hal_task->frame)) {
-        update_user_datas(impl, packet, hal_task->frame, hal_task);
-    }
-
-    // check for user data adding
-    check_hal_task_pkt_len(hal_task, "user data adding");
+    mpp_enc_add_sw_header(enc, hal_task);
 
     enc_dbg_detail("task %d enc proc hal\n", frm->seq_idx);
     ENC_RUN_FUNC2(enc_impl_proc_hal, impl, hal_task, mpp, ret);
@@ -2827,14 +2905,17 @@ static MPP_RET check_enc_async_wait(MppEncImpl *enc, EncAsyncWait *wait)
     RK_U32 last_wait = enc->status_flag;
     RK_U32 curr_wait = wait->val;
     RK_U32 wait_chg  = last_wait & (~curr_wait);
+    RK_U32 keep_notify = 0;
 
     do {
         if (enc->reset_flag)
             break;
 
         // NOTE: User control should always be processed
-        if (notify & MPP_ENC_CONTROL)
+        if (notify & MPP_ENC_CONTROL) {
+            keep_notify = notify & (~MPP_ENC_CONTROL);
             break;
+        }
 
         // NOTE: When condition is not fulfilled check nofify flag again
         if (!curr_wait || (curr_wait & notify))
@@ -2847,7 +2928,7 @@ static MPP_RET check_enc_async_wait(MppEncImpl *enc, EncAsyncWait *wait)
                    last_wait, curr_wait, wait_chg, notify, (ret) ? ("wait") : ("work"));
 
     enc->status_flag = wait->val;
-    enc->notify_flag = 0;
+    enc->notify_flag = keep_notify;
 
     if (ret) {
         enc->wait_count++;
@@ -2866,7 +2947,6 @@ static MPP_RET enc_async_wait_task(MppEncImpl *enc, EncAsyncTaskInfo *info)
     EncRcTask *rc_task = hal_task->rc_task;
     EncFrmStatus *frm = &info->rc.frm;
     MppPacket pkt = hal_task->packet;
-    MppMeta meta = mpp_packet_get_meta(pkt);
     MPP_RET ret = MPP_OK;
 
     if (hal_task->flags.drop_by_fps)
@@ -2894,13 +2974,29 @@ TASK_DONE:
         check_hal_task_pkt_len(hal_task, "hw finish");
     }
 
-    mpp_meta_set_s32(meta, KEY_OUTPUT_INTRA, frm->is_intra);
-    if (rc_task->info.quality_real)
-        mpp_meta_set_s32(meta, KEY_ENC_AVERAGE_QP, rc_task->info.quality_real);
-
-    mpp_meta_set_frame(meta, KEY_INPUT_FRAME, hal_task->frame);
-
     enc_dbg_detail("task %d output packet pts %lld\n", info->seq_idx, info->pts);
+
+    /*
+     * async encode process, there may have multiple frames encoding.
+     * if last frame enc failed, drop non-idr frames and force idr for next frame.
+     */
+    if (enc->enc_failed_drop && !hal_task->rc_task->frm.is_idr) {
+        mpp_packet_set_length(pkt, 0);
+        mpp_err_f("last frame enc failed, drop this P frame\n");
+        enc->frm_cfg.force_flag |= ENC_FORCE_IDR;
+        enc->hdr_status.val = 0;
+    } else
+        enc->enc_failed_drop = 0;
+    /* enc failed, force idr for next frame */
+    if (ret) {
+        enc->frm_cfg.force_flag |= ENC_FORCE_IDR;
+        enc->hdr_status.val = 0;
+        mpp_packet_set_length(pkt, 0);
+        enc->enc_failed_drop = 1;
+
+        mpp_err_f("enc failed force idr!\n");
+    } else
+        set_enc_info_to_packet(enc, hal_task);
 
     if (mpp->mPktOut) {
         mpp_list *pkt_out = mpp->mPktOut;

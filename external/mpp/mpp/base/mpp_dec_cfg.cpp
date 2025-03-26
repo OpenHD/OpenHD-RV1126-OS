@@ -123,6 +123,7 @@ public:
     ENTRY(base, enable_fast_play, U32, RK_U32,          MPP_DEC_CFG_CHANGE_ENABLE_FAST_PLAY, base, enable_fast_play) \
     ENTRY(base, enable_hdr_meta, U32, RK_U32,           MPP_DEC_CFG_CHANGE_ENABLE_HDR_META, base, enable_hdr_meta) \
     ENTRY(base, enable_thumbnail, U32, RK_U32,          MPP_DEC_CFG_CHANGE_ENABLE_THUMBNAIL, base, enable_thumbnail) \
+    ENTRY(base, enable_mvc,     U32, RK_U32,            MPP_DEC_CFG_CHANGE_ENABLE_MVC,      base, enable_mvc) \
     ENTRY(base, disable_thread, U32, RK_U32,            MPP_DEC_CFG_CHANGE_DISABLE_THREAD,  base, disable_thread) \
     ENTRY(cb, pkt_rdy_cb,       Ptr, MppExtCbFunc,      MPP_DEC_CB_CFG_CHANGE_PKT_RDY,      cb, pkt_rdy_cb) \
     ENTRY(cb, pkt_rdy_ctx,      Ptr, MppExtCbCtx,       MPP_DEC_CB_CFG_CHANGE_PKT_RDY,      cb, pkt_rdy_ctx) \
@@ -231,7 +232,7 @@ MppDecCfgService::MppDecCfgService() :
      * NOTE: The dec_node_len is not the real node count should be allocated
      * The max node count should be stream lengthg * 2 if each word is different.
      */
-    ret = mpp_trie_init(&trie, 328, cfg_cnt);
+    ret = mpp_trie_init(&trie, 334, cfg_cnt);
     if (ret) {
         mpp_err_f("failed to init dec cfg set trie\n");
         return ;
@@ -264,7 +265,11 @@ void mpp_dec_cfg_set_default(MppDecCfgSet *cfg)
     cfg->base.coding = MPP_VIDEO_CodingUnused;
     cfg->base.hw_type = -1;
     cfg->base.fast_parse = 1;
-    cfg->base.enable_fast_play = 1;
+#ifdef ENABLE_FASTPLAY_ONCE
+    cfg->base.enable_fast_play = MPP_ENABLE_FAST_PLAY_ONCE;
+#else
+    cfg->base.enable_fast_play = MPP_ENABLE_FAST_PLAY;
+#endif
 }
 
 MPP_RET mpp_dec_cfg_init(MppDecCfg *cfg)
@@ -278,7 +283,7 @@ MPP_RET mpp_dec_cfg_init(MppDecCfg *cfg)
     }
 
     cfg_size = MppDecCfgService::get()->get_cfg_size();
-    p = mpp_calloc_size(MppDecCfgImpl, cfg_size + sizeof(p->size));
+    p = mpp_calloc(MppDecCfgImpl, 1);
     if (NULL == p) {
         mpp_err_f("create decoder config failed %p\n", p);
         *cfg = NULL;

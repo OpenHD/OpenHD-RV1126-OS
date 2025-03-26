@@ -164,6 +164,7 @@ typedef enum {
 } MppFrameChromaLocation;
 
 #define MPP_FRAME_FMT_MASK          (0x000fffff)
+#define MPP_FRAME_FMT_PROP_MASK     (0x0ff00000)
 
 #define MPP_FRAME_FMT_COLOR_MASK    (0x000f0000)
 #define MPP_FRAME_FMT_YUV           (0x00000000)
@@ -172,10 +173,9 @@ typedef enum {
 #define MPP_FRAME_FBC_MASK          (0x00f00000)
 #define MPP_FRAME_FBC_NONE          (0x00000000)
 
-#define MPP_FRAME_HDR_MASK          (0x0f000000)
+#define MPP_FRAME_HDR_MASK          (0x0c000000)
 #define MPP_FRAME_HDR_NONE          (0x00000000)
-
-#define MPP_FRAME_HDR               (0x01000000)
+#define MPP_FRAME_HDR               (0x04000000)
 
 /*
  * AFBC_V1 is for ISP output.
@@ -194,6 +194,8 @@ typedef enum {
 
 #define MPP_FRAME_FMT_IS_YUV(fmt)   (((fmt & MPP_FRAME_FMT_COLOR_MASK) == MPP_FRAME_FMT_YUV) && \
                                      ((fmt & MPP_FRAME_FMT_MASK) < MPP_FMT_YUV_BUTT))
+#define MPP_FRAME_FMT_IS_YUV_10BIT(fmt) ((fmt & MPP_FRAME_FMT_MASK) == MPP_FMT_YUV420SP_10BIT || \
+                                        (fmt & MPP_FRAME_FMT_MASK) == MPP_FMT_YUV422SP_10BIT)
 #define MPP_FRAME_FMT_IS_RGB(fmt)   (((fmt & MPP_FRAME_FMT_COLOR_MASK) == MPP_FRAME_FMT_RGB) && \
                                      ((fmt & MPP_FRAME_FMT_MASK) < MPP_FMT_RGB_BUTT))
 
@@ -277,10 +279,29 @@ typedef struct MppFrameHdrDynamicMeta {
     RK_U8 data[];
 } MppFrameHdrDynamicMeta;
 
-typedef enum {
+typedef enum MppFrameError {
+    /* General error not specified */
     MPP_FRAME_ERR_UNKNOW           = 0x0001,
+
+    /* Critical error for decoder not support error */
     MPP_FRAME_ERR_UNSUPPORT        = 0x0002,
-} MPP_FRAME_ERR;
+
+    /*
+     * Fatal error for decoder can not parse a valid frame for hardware.
+     * the pixel data is all invalid.
+     */
+    MPP_FRAME_ERR_DEC_INVALID      = 0x0010,
+
+    /*
+     * Normal error for decoder found hardware error on decoding.
+     */
+    MPP_FRAME_ERR_DEC_HW_ERR       = 0x0100,
+
+    /*
+     * Normal error for decoder found missing reference frame on decoding.
+     */
+    MPP_FRAME_ERR_DEC_MISS_REF     = 0x0200,
+} MppFrameError;
 
 #ifdef __cplusplus
 extern "C" {

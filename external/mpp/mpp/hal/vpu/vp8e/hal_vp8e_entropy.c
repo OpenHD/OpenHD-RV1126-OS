@@ -1,17 +1,6 @@
+/* SPDX-License-Identifier: Apache-2.0 OR MIT */
 /*
- * Copyright 2017 Rockchip Electronics Co. LTD
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright (c) 2017 Rockchip Electronics Co., Ltd.
  */
 
 #define MODULE_TAG "hal_vp8e_entropy"
@@ -113,6 +102,8 @@ MPP_RET vp8e_init_entropy(void *hal)
 
         RK_U16 *p_cnt = (RK_U16 *)mpp_buffer_get_ptr(buffers->hw_prob_count_buf);
 
+        mpp_buffer_sync_end(buffers->hw_prob_count_buf);
+
         for (i = 0; i < 4; i++) {
             for (j = 0; j < 7; j++) {
                 for (k = 0; k < 3; k++) {
@@ -126,7 +117,7 @@ MPP_RET vp8e_init_entropy(void *hal)
 
                     for (l = 2; l--;) {
                         old_p = entropy->coeff_prob[i][j][k][l];
-                        old_p = coeff_update_prob_tbl[i][j][k][l];
+                        upd_p = coeff_update_prob_tbl[i][j][k][l];
 
                         tmp -= 4 * 7 * 3;
                         ii = offset_tbl[tmp];
@@ -338,6 +329,8 @@ MPP_RET vp8e_write_entropy_tables(void *hal)
         vp8e_swap_endian((RK_U32 *) table, 56 + 8 * 48 + 8 * 96);
     else
         vp8e_swap_endian((RK_U32 *) table, 56);
+
+    mpp_buffer_sync_end(buffers->hw_cabac_table_buf);
 
     return MPP_OK;
 }

@@ -33,6 +33,14 @@ static void setup_mpp_frame_name(MppFrameImpl *frame)
     frame->name = module_name;
 }
 
+static void setup_mpp_frame_defaults(MppFrameImpl *frame)
+{
+    frame->color_range = MPP_FRAME_RANGE_UNSPECIFIED;
+    frame->color_primaries = MPP_FRAME_PRI_UNSPECIFIED;
+    frame->color_trc = MPP_FRAME_TRC_UNSPECIFIED;
+    frame->colorspace = MPP_FRAME_SPC_UNSPECIFIED;
+}
+
 #define check_is_mpp_frame(frame) _check_is_mpp_frame(__FUNCTION__, frame)
 
 MPP_RET _check_is_mpp_frame(const char *func, void *frame)
@@ -59,6 +67,7 @@ MPP_RET mpp_frame_init(MppFrame *frame)
     }
 
     setup_mpp_frame_name(p);
+    setup_mpp_frame_defaults(p);
     *frame = p;
 
     return MPP_OK;
@@ -148,6 +157,13 @@ void mpp_frame_set_meta(MppFrame frame, MppMeta meta)
     p->meta = meta;
 }
 
+MppFrameStatus *mpp_frame_get_status(MppFrame frame)
+{
+    MppFrameImpl *p = (MppFrameImpl *)frame;
+
+    return &p->status;
+}
+
 void mpp_frame_set_stopwatch_enable(MppFrame frame, RK_S32 enable)
 {
     if (check_is_mpp_frame(frame))
@@ -183,8 +199,12 @@ MPP_RET mpp_frame_copy(MppFrame dst, MppFrame src)
         return MPP_ERR_UNKNOW;
     }
 
+    MppFrameImpl *p = (MppFrameImpl *)dst;
+    if (p->meta)
+        mpp_meta_put(p->meta);
+
     memcpy(dst, src, sizeof(MppFrameImpl));
-    MppFrameImpl *p = (MppFrameImpl *)src;
+    p = (MppFrameImpl *)src;
     if (p->meta)
         mpp_meta_inc_ref(p->meta);
 
@@ -205,7 +225,7 @@ MPP_RET mpp_frame_info_cmp(MppFrame frame0, MppFrame frame1)
         (f0->height             == f1->height) &&
         (f0->hor_stride         == f1->hor_stride) &&
         (f0->ver_stride         == f1->ver_stride) &&
-        (f0->fmt                == f1->fmt) &&
+        ((f0->fmt & ~MPP_FRAME_HDR_MASK) == (f1->fmt & ~MPP_FRAME_HDR_MASK)) &&
         (f0->buf_size           == f1->buf_size)) {
         return MPP_OK;
     }
@@ -290,4 +310,3 @@ MPP_FRAME_ACCESSORS(RK_U32, errinfo)
 MPP_FRAME_ACCESSORS(MppTask, task)
 MPP_FRAME_ACCESSORS(RK_U32, thumbnail_en)
 MPP_FRAME_ACCESSORS(size_t, fbc_size)
-

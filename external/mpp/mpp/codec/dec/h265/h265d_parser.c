@@ -36,6 +36,7 @@
 #include "h265d_parser.h"
 #include "h265d_syntax.h"
 #include "h265d_api.h"
+#include "h2645d_sei.h"
 
 #define START_CODE 0x000001 ///< start_code_prefix_one_3bytes
 
@@ -704,7 +705,8 @@ static RK_S32 hls_slice_header(HEVCContext *s)
     BitReadCtx_t *gb = &s->HEVClc->gb;
     SliceHeader *sh   = &s->sh;
     RK_S32 i, ret;
-    RK_S32 value, pps_id;
+    RK_S32 value;
+    RK_U32 pps_id;
     RK_S32 bit_begin;
 
 #ifdef JCTVC_M0458_INTERLAYER_RPS_SIG
@@ -1236,7 +1238,9 @@ static RK_S32 hevc_frame_start(HEVCContext *s)
         goto fail;
 
     if (!s->h265dctx->cfg->base.disable_error && s->miss_ref_flag) {
-        if (!IS_IRAP(s)) {
+        if (!IS_IRAP(s) && (!s->recovery.valid_flag ||
+                            (s->recovery.valid_flag && s->recovery.first_frm_valid &&
+                             s->recovery.first_frm_id != s->poc))) {
             mpp_frame_set_errinfo(s->frame, MPP_FRAME_ERR_UNKNOW);
             s->ref->error_flag = 1;
         } else {
@@ -1296,6 +1300,11 @@ static RK_S32 parser_nal_unit(HEVCContext *s, const RK_U8 *nal, int length)
     s->nuh_layer_id = ret;
     h265d_dbg(H265D_DBG_GLOBAL, "s->nal_unit_type = %d,len = %d \n", s->nal_unit_type, length);
 
+    if (s->deny_flag && (s->nal_unit_type != NAL_VPS && s->nal_unit_type != NAL_SPS)) {
+        ret = MPP_ERR_STREAM;
+        goto fail;
+    }
+
     switch (s->nal_unit_type) {
     case NAL_VPS:
         ret = mpp_hevc_decode_nal_vps(s);
@@ -1310,6 +1319,8 @@ static RK_S32 parser_nal_unit(HEVCContext *s, const RK_U8 *nal, int length)
             mpp_err("mpp_hevc_decode_nal_sps error ret = %d", ret);
             goto fail;
         }
+
+        s->deny_flag = 0;
         break;
     case NAL_PPS:
         if (s->pre_pps_data == NULL) {
@@ -1380,8 +1391,22 @@ static RK_S32 parser_nal_unit(HEVCContext *s, const RK_U8 *nal, int length)
             return ret;
         }
 
+        if (s->recovery.valid_flag) {
+            if (!s->recovery.first_frm_valid) {
+                s->recovery.first_frm_id = s->poc;
+                s->recovery.first_frm_valid = 1;
+                s->recovery.recovery_pic_id = s->recovery.first_frm_id + s->recovery.recovery_frame_cnt;
+                h265d_dbg(H265D_DBG_SEI, "First recovery frame found, poc %d", s->recovery.first_frm_id);
+            } else {
+                if (s->recovery.recovery_pic_id < s->poc)
+                    memset(&s->recovery, 0, sizeof(RecoveryPoint));
+            }
+        }
+
         if (s->max_ra == INT_MAX) {
-            if (s->nal_unit_type == NAL_CRA_NUT || IS_BLA(s)) {
+            if (s->nal_unit_type == NAL_CRA_NUT || IS_BLA(s) ||
+                (s->recovery.valid_flag && s->recovery.first_frm_valid &&
+                 s->recovery.first_frm_id == s->poc)) {
                 s->max_ra = s->poc;
             } else {
                 if (IS_IDR(s))
@@ -1668,7 +1693,7 @@ void mpp_hevc_fill_dynamic_meta(HEVCContext *s, const RK_U8 *data, RK_U32 size, 
             return;
         }
     }
-    if (hdr_dynamic_meta->data && data) {
+    if (size && data) {
         if (hdr_fmt == DOLBY) {
             RK_U8 start_code[4] = {0, 0, 0, 1};
 
@@ -1973,7 +1998,8 @@ MPP_RET h265d_parse(void *ctx, HalDecTask *task)
     }
     h265d_dbg(H265D_DBG_GLOBAL, "decode poc = %d", s->poc);
     if (s->ref) {
-        h265d_parser2_syntax(h265dctx);
+        if (!task->flags.parse_err)
+            h265d_parser2_syntax(h265dctx);
 
         s->task->syntax.data = s->hal_pic_private;
         s->task->syntax.number = 1;

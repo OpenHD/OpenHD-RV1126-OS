@@ -91,6 +91,7 @@ do {\
         AVS2D_DBG(AVS2D_DBG_WARNNING, "expected marker_bit 1 while received 0(%d).\n", __LINE__); \
 }} while (0)
 
+#define MAX_NALU_NUM                        (20)
 #define MAX_HEADER_SIZE                     (2*1024)
 #define MAX_STREAM_SIZE                     (2*1024*1024)
 
@@ -128,6 +129,7 @@ do {\
 #define AVS2_MAX_BUF_NUM                19
 #define AVS2_MAX_DPB_SIZE               15
 #define AVS2_DOI_CYCLE                  256
+#define AVS2_MAX_POC_DISTANCE           128
 
 #define ALF_MAX_FILTERS                 16
 #define ALF_MAX_COEFS                   9
@@ -161,10 +163,8 @@ typedef enum avs2d_picture_type_e {
 
 typedef struct avs2d_nalu_t {
     RK_U32      header;
-    RK_U32      size;
     RK_U32      length;
-    RK_U8      *pdata;
-    RK_U8       start_pos;
+    RK_U32      data_pos;
     RK_U8       eof; //!< end of frame stream
 } Avs2dNalu_t;
 
@@ -334,12 +334,14 @@ typedef struct avs2d_stream_buf_t {
 } Avs2dStreamBuf_t;
 
 typedef struct avs2d_memory_t {
+    Avs2dStreamBuf_t        nals_buf;
     Avs2dStreamBuf_t        headerbuf;
     Avs2dStreamBuf_t        streambuf;
 } Avs2dMemory_t;
 
 typedef struct avs2d_frame_mgr_t {
     RK_U32                  dpb_size;
+    RK_U32                  dpb_specific_size;
     RK_U32                  used_size;
     Avs2dFrame_t          **dpb;
     RK_U8                   num_of_ref;
@@ -351,7 +353,6 @@ typedef struct avs2d_frame_mgr_t {
     RK_S32                  prev_doi;
     RK_S32                  output_poi;
     RK_S32                  tr_wrap_cnt;
-    RK_U8                   poi_interval;
     RK_U8                   initial_flag;
 } Avs2dFrameMgr_t;
 
@@ -379,8 +380,9 @@ typedef struct avs2_dec_ctx_t {
     RK_U8                   has_get_eos;
 
     //-------- current --------------
-    Avs2dNalu_t            *nal; //!< current nalu
+    Avs2dNalu_t             *p_nals;
     RK_U32                  nal_cnt;
+    RK_U32                  nal_allocated;
 
     //--------  video  --------------
     BitReadCtx_t            bitctx;

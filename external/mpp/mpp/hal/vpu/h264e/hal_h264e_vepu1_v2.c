@@ -207,7 +207,8 @@ static MPP_RET hal_h264e_vepu1_get_task_v2(void *hal, HalEncTask *task)
         h264e_vepu_buf_set_frame_size(hw_bufs, prep->width, prep->height);
 
         /* preprocess setup */
-        h264e_vepu_prep_setup(hw_prep, prep);
+        if (h264e_vepu_prep_setup(hw_prep, prep))
+            return MPP_NOK;
 
         h264e_vepu_mbrc_setup(ctx->rc_ctx, ctx->cfg);
     }
@@ -673,7 +674,7 @@ static MPP_RET hal_h264e_vepu1_wait_v2(void *hal, HalEncTask *task)
         HalH264eVepuStreamAmend *amend = &ctx->amend;
         if (amend->enable) {
             amend->old_length = hw_mbrc->out_strm_size;
-            h264e_vepu_stream_amend_proc(amend, ctx->cfg->codec.h264.hw_poc_type);
+            h264e_vepu_stream_amend_proc(amend, &ctx->cfg->codec.h264.hw_cfg);
             ctx->hw_mbrc.out_strm_size = amend->new_length;
         } else if (amend->prefix) {
             /* check prefix value */

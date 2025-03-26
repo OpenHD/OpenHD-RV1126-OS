@@ -76,6 +76,7 @@ enum IEP2_PARAM_TYPE {
     IEP2_PARAM_TYPE_ROI
 };
 
+// Pulldown compose flag
 enum PD_COMP_FLAG {
     PD_COMP_FLAG_CC,
     PD_COMP_FLAG_CN,
@@ -130,6 +131,7 @@ struct iep2_api_info {
     bool frm_mode;
     enum PD_TYPES pd_types;
     enum PD_COMP_FLAG pd_flag;
+    RK_U32 dil_order_confidence_ratio;
 };
 
 struct mv_list {

@@ -33,7 +33,6 @@ G_BEGIN_DECLS;
 
 #define GST_TYPE_MPP_ENC (gst_mpp_enc_get_type())
 G_DECLARE_FINAL_TYPE (GstMppEnc, gst_mpp_enc, GST, MPP_ENC, GstVideoEncoder);
-typedef struct _GstMppDec GstMppDec;
 
 #define GST_MPP_ENC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
     GST_TYPE_MPP_ENC, GstMppEnc))
@@ -55,6 +54,11 @@ struct _GstMppEnc
   /* drop frames when flushing but not draining */
   gboolean draining;
 
+  /* frame system numbers that are ready for sending to MPP */
+  GList *frames;
+
+  guint32 required_keyframe_number;
+
   guint pending_frames;
   GMutex event_mutex;
   GCond event_cond;
@@ -64,8 +68,11 @@ struct _GstMppEnc
 
   MppEncHeaderMode header_mode;
   MppEncRcMode rc_mode;
-  MppEncRotationCfg rotation;
   MppEncSeiMode sei_mode;
+
+  gint rotation;
+  gint width;
+  gint height;
 
   gint gop;
   guint max_reenc;
@@ -75,6 +82,8 @@ struct _GstMppEnc
   guint bps_max;
 
   gboolean zero_copy_pkt;
+
+  gboolean arm_afbc;
 
   gboolean prop_dirty;
 
@@ -86,13 +95,21 @@ struct _GstMppEnc
   MppApi *mpi;
 };
 
-#define MPP_ENC_FORMATS \
+#define MPP_ENC_IN_FORMATS \
     "NV12, I420, YUY2, UYVY, " \
-    "BGR16, RGB16, BGR15, RGB15, " \
+    "BGR16, RGB16, " \
     "ABGR, ARGB, BGRA, RGBA, xBGR, xRGB, BGRx, RGBx"
+
+#ifdef HAVE_RGA
+#define MPP_ENC_FORMATS MPP_ENC_IN_FORMATS "," GST_RGA_FORMATS
+#else
+#define MPP_ENC_FORMATS MPP_ENC_IN_FORMATS
+#endif
 
 gboolean gst_mpp_enc_apply_properties (GstVideoEncoder * encoder);
 gboolean gst_mpp_enc_set_src_caps (GstVideoEncoder * encoder, GstCaps * caps);
+
+gboolean gst_mpp_enc_supported (MppCodingType mpp_type);
 
 G_END_DECLS;
 

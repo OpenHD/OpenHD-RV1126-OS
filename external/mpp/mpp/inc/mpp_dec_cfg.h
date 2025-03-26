@@ -37,8 +37,10 @@ typedef enum MppDecCfgChange_e {
     MPP_DEC_CFG_CHANGE_ENABLE_FAST_PLAY = (1 << 16),
     MPP_DEC_CFG_CHANGE_ENABLE_HDR_META  = (1 << 17),
     MPP_DEC_CFG_CHANGE_ENABLE_THUMBNAIL = (1 << 18),
+    MPP_DEC_CFG_CHANGE_ENABLE_MVC       = (1 << 19),
     /* reserve high bit for global config */
     MPP_DEC_CFG_CHANGE_DISABLE_THREAD   = (1 << 28),
+
     MPP_DEC_CFG_CHANGE_ALL              = (0xFFFFFFFF),
 } MppDecCfgChange;
 
@@ -47,6 +49,13 @@ typedef enum MppVprocMode_e {
     MPP_VPROC_MODE_DETECTION            = (1 << 1),
     MPP_VPROC_MODE_ALL                  = (0xFFFFFFFF),
 } MppVprocMode;
+
+typedef enum FastPlayMode_e {
+    MPP_DISABLE_FAST_PLAY,
+    MPP_ENABLE_FAST_PLAY,
+    // first gop fast play when poc include negative value, otherwise enable fast play all time
+    MPP_ENABLE_FAST_PLAY_ONCE,
+} FastPlayMode;
 
 typedef struct MppDecBaseCfg_t {
     RK_U64              change;
@@ -67,6 +76,7 @@ typedef struct MppDecBaseCfg_t {
     RK_U32              enable_fast_play;
     RK_U32              enable_hdr_meta;
     RK_U32              enable_thumbnail;
+    RK_U32              enable_mvc;
     RK_U32              disable_thread;
 } MppDecBaseCfg;
 

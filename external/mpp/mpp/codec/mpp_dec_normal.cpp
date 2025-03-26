@@ -46,14 +46,17 @@ static MPP_RET check_task_wait(MppDecImpl *dec, DecTask *task)
     RK_U32 last_wait = dec->parser_wait_flag;
     RK_U32 curr_wait = task->wait.val;
     RK_U32 wait_chg  = last_wait & (~curr_wait);
+    RK_U32 keep_notify = 0;
 
     do {
         if (dec->reset_flag)
             break;
 
         // NOTE: User control should always be processed
-        if (notify & MPP_DEC_CONTROL)
+        if (notify & MPP_DEC_CONTROL) {
+            keep_notify = notify & (~MPP_DEC_CONTROL);
             break;
+        }
 
         // NOTE: When condition is not fulfilled check nofify flag again
         if (!curr_wait || (curr_wait & notify))
@@ -68,7 +71,7 @@ static MPP_RET check_task_wait(MppDecImpl *dec, DecTask *task)
 
     dec->parser_status_flag = task->status.val;
     dec->parser_wait_flag = task->wait.val;
-    dec->parser_notify_flag = 0;
+    dec->parser_notify_flag = keep_notify;
 
     if (ret) {
         dec->parser_wait_count++;
@@ -437,11 +440,11 @@ static MPP_RET try_proc_dec_task(Mpp *mpp, DecTask *task)
      * 6. copy prepared stream to hardware buffer
      */
     if (!task->status.dec_pkt_copy_rdy) {
-        void *dst = mpp_buffer_get_ptr(hal_buf_in);
         void *src = mpp_packet_get_data(task_dec->input_packet);
         size_t length = mpp_packet_get_length(task_dec->input_packet);
 
-        memcpy(dst, src, length);
+        mpp_buffer_write(hal_buf_in, 0, src, length);
+        mpp_buffer_sync_partial_end(hal_buf_in, 0, length);
         mpp_buf_slot_set_flag(packet_slots, task_dec->input, SLOT_CODEC_READY);
         mpp_buf_slot_set_flag(packet_slots, task_dec->input, SLOT_HAL_INPUT);
         task->status.dec_pkt_copy_rdy = 1;
@@ -568,7 +571,7 @@ static MPP_RET try_proc_dec_task(Mpp *mpp, DecTask *task)
     /* 10. whether the frame buffer group is internal or external */
     if (NULL == mpp->mFrameGroup) {
         mpp_log("mpp_dec use internal frame buffer group\n");
-        mpp_buffer_group_get_internal(&mpp->mFrameGroup, MPP_BUFFER_TYPE_ION);
+        mpp_buffer_group_get_internal(&mpp->mFrameGroup, MPP_BUFFER_TYPE_ION | MPP_BUFFER_FLAGS_CACHABLE);
     }
 
     /* 10.1 look for a unused hardware buffer for output */
@@ -604,7 +607,7 @@ static MPP_RET try_proc_dec_task(Mpp *mpp, DecTask *task)
                                   hal_buf_out);
     }
 
-    dec_dbg_detail("detail: %p check output buffer %p\n", hal_buf_out, dec);
+    dec_dbg_detail("detail: %p check output buffer %p\n", dec, hal_buf_out);
 
     // update codec info
     if (!dec->info_updated && dec->dev) {
@@ -1061,6 +1064,7 @@ void *mpp_dec_advanced_thread(void *data)
         mpp_port_poll(output, MPP_POLL_BLOCK);
         mpp_port_dequeue(output, &mpp_task);
         mpp_task_meta_set_frame(mpp_task, KEY_OUTPUT_FRAME, frame);
+        mpp_buffer_sync_ro_begin(mpp_frame_get_buffer(frame));
 
         // setup output task here
         mpp_port_enqueue(output, mpp_task);
@@ -1126,6 +1130,9 @@ MPP_RET mpp_dec_notify_normal(MppDecImpl *dec, RK_U32 flag)
 {
     MppThread *thd_dec  = dec->thread_parser;
     RK_U32 notify = 0;
+
+    if (!thd_dec)
+        return MPP_NOK;
 
     thd_dec->lock();
     if (flag == MPP_DEC_CONTROL) {

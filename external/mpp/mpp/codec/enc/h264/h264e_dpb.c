@@ -48,13 +48,14 @@ void h264e_dpb_dump_frm(H264eDpb *dpb, const char *caller, RK_S32 line)
     mpp_log_f("dump dpb frame info in %s line %d\n", caller, line);
 
     mpp_log_f("dpb %p total count %d size %d\n", dpb, dpb->total_cnt, dpb->dpb_size);
-    mpp_log_f("dpb slot use seq type tid ref idx mode arg\n");
+    mpp_log_f("dpb %5s %5s %5s %5s %5s %5s %5s %5s %5s\n",
+              "slot", "use", "seq", "type", "tid", "ref", "idx", "mode", "arg");
 
     for (i = 0; i < dpb->total_cnt; i++) {
         H264eDpbFrm *frm = &dpb->frames[i];
         EncFrmStatus *status = &frm->status;
 
-        mpp_log_f("frm  %2d   %d  %-3d %s    %-3d %-3s %-3d %-4x %-3d\n",
+        mpp_log_f("frm %5d %5d %5d %5s %5d %5s %5d %5x %5d\n",
                   i, frm->on_used, status->seq_idx,
                   (status->is_intra) ? (status->is_idr ? "I" : "i" ) :
                       status->is_non_ref ? "p" : "P",
@@ -344,8 +345,7 @@ void h264e_dpb_build_list(H264eDpb *dpb, EncCpbStatus *cpb)
 
                 h264e_dbg_list("reorder lt idx %d \n", op.long_term_pic_idx);
             } else {
-                /* Only support refr pic num less than current pic num case */
-                op.modification_of_pic_nums_idc = 0;
+                op.modification_of_pic_nums_idc = curr->frame_num > refr->frame_num ? 0 : 1;
                 op.abs_diff_pic_num_minus1 = MPP_ABS(curr->frame_num - refr->frame_num) - 1;
 
                 h264e_dbg_list("reorder st cur %d refr %d diff - 1 %d\n",

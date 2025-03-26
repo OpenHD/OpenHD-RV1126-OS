@@ -220,12 +220,13 @@ void fill_picparams(H264dVideoCtx_t *p_Vid, DXVA_PicParams_H264_MVC *pp)
 
     //!< Following are H.264 MVC Specific parameters
     if (p_Vid->active_subsps) {
-        RK_U16 num_views = 0;
+        RK_S32 num_views = 0;
         pp->num_views_minus1 = p_Vid->active_subsps->num_views_minus1;
         num_views = 1 + pp->num_views_minus1;
         ASSERT(num_views <= 16);
+        ASSERT(num_views >= 0);
 
-        for (i = 0; i < num_views; i++) {
+        for (i = 0; i < (RK_U32)num_views; i++) {
             pp->view_id[i] = p_Vid->active_subsps->view_id[i];
             pp->num_anchor_refs_l0[i] = p_Vid->active_subsps->num_anchor_refs_l0[i];
             for (j = 0; j < pp->num_anchor_refs_l0[i]; j++) {
@@ -263,7 +264,14 @@ void fill_picparams(H264dVideoCtx_t *p_Vid, DXVA_PicParams_H264_MVC *pp)
             }
             pp->RefPicLayerIdList[i] = dpb_info[i].voidx;
         }
+    } else {
+        pp->num_views_minus1 = 0;
+        pp->curr_layer_id = dec_pic->layer_id;
+        memset(pp->view_id, 0, sizeof(pp->view_id));
+        memset(pp->ViewIDList, 0, sizeof(pp->ViewIDList));
+        memset(pp->RefPicLayerIdList, 0, sizeof(pp->RefPicLayerIdList));
     }
+
     p_Vid->spspps_update = 0;
 }
 

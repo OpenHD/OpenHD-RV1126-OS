@@ -67,7 +67,7 @@
 
 #define SKIP_BITS(bitctx, num_bits)\
     do {\
-        bitctx->ret = mpp_skip_bits(bitctx, num_bits); \
+        bitctx->ret = mpp_skip_longbits(bitctx, num_bits); \
         if (bitctx->ret) { goto __BITREAD_ERR; }\
     } while (0)
 
@@ -96,6 +96,7 @@
 typedef enum  PseudoCodeType_e {
     PSEUDO_CODE_NONE = 0,
     PSEUDO_CODE_H264_H265,
+    PSEUDO_CODE_H264_H265_SEI,
     PSEUDO_CODE_AVS2,
     PSEUDO_CODE_BUT
 } PseudoCodeType;

@@ -1,0 +1,4 @@
+config BR2_PACKAGE_OPENHD_PARTITION
+    bool "openhd_partition autostart script"
+    help
+      Automatically executes /oem/openhd_part.sh at boot.

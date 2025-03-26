@@ -131,6 +131,16 @@ CamSource *camera_source_init(const char *device, RK_U32 bufcnt, RK_U32 width, R
         goto FAIL;
     }
 
+    {
+        struct v4l2_input input;
+
+        input.index = 0;
+        while (!camera_source_ioctl(ctx->fd, VIDIOC_ENUMINPUT, &input)) {
+            mpp_log("input devices:%s\n", input.name);
+            ++input.index;
+        }
+    }
+
     // Determine if fd is a V4L2 Device
     if (0 != camera_source_ioctl(ctx->fd, VIDIOC_QUERYCAP, &cap)) {
         mpp_err_f("Not v4l2 compatible\n");
@@ -156,6 +166,20 @@ CamSource *camera_source_init(const char *device, RK_U32 bufcnt, RK_U32 width, R
 
     vfmt.fmt.pix.width = width;
     vfmt.fmt.pix.height = height;
+
+    {
+        struct v4l2_fmtdesc fmtdesc;
+
+        fmtdesc.index = 0;
+        fmtdesc.type = vfmt.type;
+        while (!camera_source_ioctl(ctx->fd, VIDIOC_ENUM_FMT, &fmtdesc)) {
+            mpp_log("fmt name: [%s]\n", fmtdesc.description);
+            mpp_log("fmt pixelformat: '%c%c%c%c', description = '%s'\n", fmtdesc.pixelformat & 0xFF,
+                    (fmtdesc.pixelformat >> 8) & 0xFF, (fmtdesc.pixelformat >> 16) & 0xFF,
+                    (fmtdesc.pixelformat >> 24) & 0xFF, fmtdesc.description);
+            fmtdesc.index++;
+        }
+    }
 
     if (MPP_FRAME_FMT_IS_YUV(format)) {
         vfmt.fmt.pix.pixelformat = V4L2_yuv_cfg[format - MPP_FRAME_FMT_YUV];
@@ -214,9 +238,6 @@ CamSource *camera_source_init(const char *device, RK_U32 bufcnt, RK_U32 width, R
             goto FAIL;
         }
 
-        ctx->fbuf[i].start = mmap(NULL, buf.length,
-                                  PROT_READ | PROT_WRITE, MAP_SHARED,
-                                  ctx->fd, buf.m.offset);
         if (V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE == buf.type) {
             // tmp_buffers[n_buffers].length = buf.m.planes[0].length;
             buf_len = buf.m.planes[0].length;
@@ -239,6 +260,9 @@ CamSource *camera_source_init(const char *device, RK_U32 bufcnt, RK_U32 width, R
             mpp_err_f("ERROR: Failed to map device frame buffers\n");
             goto FAIL;
         }
+
+        ctx->fbuf[i].length = buf_len; // record buffer length for unmap
+
         struct v4l2_exportbuffer expbuf = (struct v4l2_exportbuffer) {0} ;
         // xcam_mem_clear (expbuf);
         expbuf.type = type;
@@ -276,7 +300,6 @@ CamSource *camera_source_init(const char *device, RK_U32 bufcnt, RK_U32 width, R
 
         if (-1 == camera_source_ioctl(ctx->fd, VIDIOC_QBUF, &buf)) {
             mpp_err_f("ERROR: VIDIOC_QBUF %d\n", i);
-            camera_source_deinit(ctx);
             goto FAIL;
         }
     }
@@ -284,7 +307,6 @@ CamSource *camera_source_init(const char *device, RK_U32 bufcnt, RK_U32 width, R
     // Start capturing
     if (-1 == camera_source_ioctl(ctx->fd, VIDIOC_STREAMON, &type)) {
         mpp_err_f("ERROR: VIDIOC_STREAMON\n");
-        camera_source_deinit(ctx);
         goto FAIL;
     }
 
@@ -331,7 +353,8 @@ MPP_RET camera_source_deinit(CamSource *ctx)
         if (ctx->fbuf[buf.index].buffer) {
             mpp_buffer_put(ctx->fbuf[buf.index].buffer);
         }
-        munmap(ctx->fbuf[buf.index].start, buf.length);
+        munmap(ctx->fbuf[buf.index].start, ctx->fbuf[buf.index].length);
+        close(ctx->fbuf[i].export_fd);
     }
 
     // Close v4l2 device
@@ -405,8 +428,14 @@ MPP_RET camera_source_put_frame(CamSource *ctx, RK_S32 idx)
 
 MppBuffer camera_frame_to_buf(CamSource *ctx, RK_S32 idx)
 {
-    if (idx < 0)
-        return NULL;
+    MppBuffer buf = NULL;
 
-    return ctx->fbuf[idx].buffer;
+    if (idx < 0)
+        return buf;
+
+    buf = ctx->fbuf[idx].buffer;
+    if (buf)
+        mpp_buffer_sync_end(buf);
+
+    return buf;
 }

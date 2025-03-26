@@ -79,12 +79,13 @@ static void reset_slice(H264dVideoCtx_t *p_Vid)
     memset(currSlice, 0, sizeof(H264_SLICE_t));
     //-- re-init parameters
     currSlice->view_id = -1;
-    currSlice->p_Vid   = p_Vid;
-    currSlice->p_Dec   = p_Vid->p_Dec;
-    currSlice->p_Cur   = p_Vid->p_Cur;
-    currSlice->p_Inp   = p_Vid->p_Inp;
+    currSlice->p_Vid = p_Vid;
+    currSlice->p_Dec = p_Vid->p_Dec;
+    currSlice->p_Cur = p_Vid->p_Cur;
+    currSlice->p_Inp = p_Vid->p_Inp;
     currSlice->active_sps = p_Vid->active_sps;
     currSlice->active_pps = p_Vid->active_pps;
+    currSlice->active_subsps = p_Vid->active_subsps;
     //--- reset listP listB
     for (i = 0; i < MAX_NUM_DPB_LAYERS; i++) {
         currSlice->listP[i] = p_Vid->p_Cur->listP[i];
@@ -225,6 +226,13 @@ static MPP_RET parser_one_nalu(H264_SLICE_t *currSlice)
     MPP_RET ret = MPP_ERR_UNKNOW;
 
     FUN_CHECK(ret = parser_nalu_header(currSlice));
+
+    if (currSlice->p_Vid->deny_flag &&
+        currSlice->p_Cur->nalu.nalu_type != H264_NALU_TYPE_SPS) {
+        currSlice->p_Dec->nalu_ret = NaluNotSupport;
+        return MPP_OK;
+    }
+
     //!< nalu_parse
     switch (currSlice->p_Cur->nalu.nalu_type) {
     case H264_NALU_TYPE_SLICE:
@@ -232,13 +240,14 @@ static MPP_RET parser_one_nalu(H264_SLICE_t *currSlice)
         H264D_DBG(H264D_DBG_PARSE_NALU, "nalu_type=SLICE.");
         FUN_CHECK(ret = process_slice(currSlice));
         currSlice->p_Dec->nalu_ret = StartOfPicture;
-        if (currSlice->layer_id && currSlice->p_Inp->mvc_disable)
+        if (currSlice->layer_id && !currSlice->p_Dec->cfg->base.enable_mvc)
             currSlice->p_Dec->nalu_ret = MvcDisAble;
         break;
     case H264_NALU_TYPE_SPS:
         H264D_DBG(H264D_DBG_PARSE_NALU, "nalu_type=SPS");
         FUN_CHECK(ret = process_sps(currSlice));
         currSlice->p_Dec->nalu_ret = NALU_SPS;
+        currSlice->p_Vid->deny_flag = 0;
         break;
     case H264_NALU_TYPE_PPS:
         H264D_DBG(H264D_DBG_PARSE_NALU, "nalu_type=PPS");
@@ -342,6 +351,15 @@ static MPP_RET store_cur_nalu(H264dCurCtx_t *p_Cur, H264dCurStream_t *p_strm, H2
         RK_U32 head_size = MPP_MIN(HEAD_SYNTAX_MAX_SIZE, p_strm->nalu_len);
         RK_U32 add_size = head_size + sizeof(H264dNaluHead_t);
 
+        //!< judge new frame
+        if (p_strm->tmp_offset && !p_strm->head_offset) {
+            memcpy(p_strm->head_buf, p_strm->tmp_buf, p_strm->tmp_offset);
+            p_strm->head_offset += p_strm->tmp_offset;
+            p_strm->tmp_offset = 0;
+
+            H264D_LOG("copy tmp header to empty header of new frame");
+        }
+
         if ((p_strm->head_offset + add_size) >= p_strm->head_max_size) {
             FUN_CHECK(ret = realloc_buffer(&p_strm->head_buf, &p_strm->head_max_size, add_size));
         }
@@ -351,6 +369,24 @@ static MPP_RET store_cur_nalu(H264dCurCtx_t *p_Cur, H264dCurStream_t *p_strm, H2
         ((H264dNaluHead_t *)p_des)->sodb_len = head_size;
         memcpy(p_des + sizeof(H264dNaluHead_t), p_strm->nalu_buf, head_size);
         p_strm->head_offset += add_size;
+
+        H264D_LOG("store current header, NAL type %d", p_strm->nalu_type);
+
+        // store NAL header except slice NAL
+        if (p_Cur->p_Dec->have_slice_data && p_strm->nalu_type != H264_NALU_TYPE_IDR &&
+            p_strm->nalu_type != H264_NALU_TYPE_SLICE) {
+            RK_U8 *p_tmp = NULL;
+
+            if ((p_strm->tmp_offset + add_size) >= p_strm->tmp_max_size) {
+                FUN_CHECK(ret = realloc_buffer(&p_strm->tmp_buf, &p_strm->tmp_max_size, add_size));
+            }
+
+            p_tmp = &p_strm->tmp_buf[p_strm->tmp_offset];
+            memcpy(p_tmp, p_des, add_size);
+            p_strm->tmp_offset += add_size;
+
+            H264D_LOG("store current header to tmp header, NAL type %d", p_strm->nalu_type);
+        }
     }    //!< fill sodb buffer
     if ((p_strm->nalu_type == H264_NALU_TYPE_SLICE)
         || (p_strm->nalu_type == H264_NALU_TYPE_IDR)) {
@@ -366,7 +402,7 @@ static MPP_RET store_cur_nalu(H264dCurCtx_t *p_Cur, H264dCurStream_t *p_strm, H2
         memcpy(p_des + sizeof(g_start_precode), p_strm->nalu_buf, p_strm->nalu_len);
         dxva_ctx->strm_offset += add_size;
     }
-    if (rkv_h264d_parse_debug & H264D_DBG_WRITE_ES_EN) {
+    if (h264d_debug & H264D_DBG_WRITE_ES_EN) {
         H264dInputCtx_t *p_Inp = p_Cur->p_Inp;
         if ((p_strm->nalu_type == H264_NALU_TYPE_SPS)
             || (p_strm->nalu_type == H264_NALU_TYPE_PPS)) {
@@ -420,8 +456,13 @@ static MPP_RET judge_is_new_frame(H264dCurCtx_t *p_Cur, H264dCurStream_t *p_strm
         && (p_strm->nalu_type == H264_NALU_TYPE_SEI
             || p_strm->nalu_type == H264_NALU_TYPE_SPS
             || p_strm->nalu_type == H264_NALU_TYPE_PPS
+            || p_strm->nalu_type == H264_NALU_TYPE_SUB_SPS
             || p_strm->nalu_type == H264_NALU_TYPE_AUD
             /*|| p_strm->nalu_type == H264_NALU_TYPE_PREFIX*/)) { // prefix may insert in slices of one frame
+        p_Cur->last_dts = p_Cur->curr_dts;
+        p_Cur->last_pts = p_Cur->curr_pts;
+        p_Cur->curr_dts = p_Cur->p_Inp->in_dts;
+        p_Cur->curr_pts = p_Cur->p_Inp->in_pts;
         if (p_Cur->p_Dec->have_slice_data) {
             p_Cur->p_Dec->is_new_frame = 1;
         }
@@ -442,7 +483,12 @@ static MPP_RET judge_is_new_frame(H264dCurCtx_t *p_Cur, H264dCurStream_t *p_strm
                 p_Cur->p_Dec->is_new_frame = 1;
             }
             p_Cur->p_Dec->have_slice_data = 1;
+        } else if (p_strm->tmp_offset != 0 &&
+                   first_mb_in_slice != p_Cur->strm.first_mb_in_slice) {
+            p_strm->tmp_offset = 0;
+            H264D_LOG("reset temporary header");
         }
+        p_Cur->strm.first_mb_in_slice = first_mb_in_slice;
     }
 
     return ret = MPP_OK;
@@ -461,7 +507,7 @@ static RK_U64 global_flie_size = 0;
 */
 MPP_RET open_stream_file(H264dInputCtx_t *p_Inp, char *path)
 {
-    if (rkv_h264d_parse_debug & H264D_DBG_WRITE_ES_EN) {
+    if (h264d_debug & H264D_DBG_WRITE_ES_EN) {
 
         sprintf(p_Inp->fname[0], "%s/rkv_h264d_file_00.h264", path);
         sprintf(p_Inp->fname[1], "%s/rkv_h264d_file_01.h264", path);
@@ -483,7 +529,7 @@ MPP_RET open_stream_file(H264dInputCtx_t *p_Inp, char *path)
 */
 MPP_RET fwrite_stream_to_file(H264dInputCtx_t *p_Inp, RK_U8 *pdata, RK_U32 len)
 {
-    if (p_Inp->fp && (rkv_h264d_parse_debug & H264D_DBG_WRITE_ES_EN)) {
+    if (p_Inp->fp && (h264d_debug & H264D_DBG_WRITE_ES_EN)) {
         if (p_Inp->fp) {
             fwrite(pdata, sizeof(RK_U8), len, p_Inp->fp);
             fflush(p_Inp->fp);
@@ -513,7 +559,7 @@ MPP_RET fwrite_stream_to_file(H264dInputCtx_t *p_Inp, RK_U8 *pdata, RK_U32 len)
 */
 MPP_RET close_stream_file(H264dInputCtx_t *p_Inp)
 {
-    if (rkv_h264d_parse_debug & H264D_DBG_WRITE_ES_EN) {
+    if (h264d_debug & H264D_DBG_WRITE_ES_EN) {
         if (p_Inp->fp) {
             fflush(p_Inp->fp);
             MPP_FCLOSE(p_Inp->fp);
@@ -521,6 +567,31 @@ MPP_RET close_stream_file(H264dInputCtx_t *p_Inp)
     }
 
     return MPP_OK;
+}
+/*!
+***********************************************************************
+* \brief
+*    clear last redundancy header if exist
+***********************************************************************
+*/
+static MPP_RET clear_extra_header(H264dCurStream_t *p_strm)
+{
+    MPP_RET ret = MPP_OK;
+
+    if (p_strm->tmp_offset >= p_strm->head_offset) {
+        H264D_WARNNING("tmp header data is too long! skip clear operation");
+        ret = MPP_NOK;
+    } else {
+        RK_U32 pos = p_strm->head_offset - p_strm->tmp_offset;
+        RK_U8 *p_des = &p_strm->head_buf[pos];
+
+        memset(p_des, 0, p_strm->tmp_offset);
+        p_strm->head_offset -= p_strm->tmp_offset;
+
+        H264D_LOG("clear last redundancy header in slice");
+    }
+
+    return ret;
 }
 /*!
 ***********************************************************************
@@ -543,7 +614,7 @@ MPP_RET parse_prepare(H264dInputCtx_t *p_Inp, H264dCurCtx_t *p_Cur)
     if (p_Inp->pkt_eos && !p_Inp->in_length) {
         FUN_CHECK(ret = store_cur_nalu(p_Cur, p_strm, p_Dec->dxva_ctx));
         FUN_CHECK(ret = add_empty_nalu(p_strm));
-        p_Dec->p_Inp->task_valid = 1;
+        p_Dec->p_Inp->task_valid = p_Dec->p_Inp->task_eos ? 0 : 1;
         p_Dec->p_Inp->task_eos = 1;
         H264D_LOG("----- end of stream ----");
         goto __RETURN;
@@ -567,10 +638,15 @@ MPP_RET parse_prepare(H264dInputCtx_t *p_Inp, H264dCurCtx_t *p_Cur)
                 || (p_strm->nalu_len == NALU_TYPE_EXT_LENGTH)) {
                 FUN_CHECK(ret = judge_is_new_frame(p_Cur, p_strm));
                 if (p_Cur->p_Dec->is_new_frame) {
+                    if (p_strm->tmp_offset)
+                        clear_extra_header(p_strm);
                     FUN_CHECK(ret = add_empty_nalu(p_strm));
                     p_strm->head_offset = 0;
+                    p_strm->first_mb_in_slice = 0;
                     p_Cur->p_Inp->task_valid = 1;
                     p_Cur->p_Dec->is_new_frame = 0;
+
+                    H264D_LOG("new frame is found");
                     break;
                 }
             }
@@ -604,6 +680,7 @@ MPP_RET parse_prepare(H264dInputCtx_t *p_Inp, H264dCurCtx_t *p_Cur)
         FUN_CHECK(ret = add_empty_nalu(p_strm));
         p_Dec->p_Inp->task_valid = 1;
         p_Dec->p_Inp->task_eos = 1;
+        H264D_LOG("----- found eos in last non-empty packet ----");
     }
 
 __RETURN:
@@ -644,6 +721,10 @@ MPP_RET parse_prepare_fast(H264dInputCtx_t *p_Inp, H264dCurCtx_t *p_Cur)
 
                 if (p_strm->nalu_type == H264_NALU_TYPE_SLICE
                     || p_strm->nalu_type == H264_NALU_TYPE_IDR || p_strm->nalu_type == H264_NALU_TYPE_SLC_EXT) {
+
+                    if (p_strm->nalu_type == H264_NALU_TYPE_SLC_EXT)
+                        p_strm->nalu_type = H264_NALU_TYPE_SLICE;
+
                     p_strm->nalu_len += (RK_U32)pkt_impl->length;
                     if (p_strm->nalu_len >= p_strm->nalu_max_size) {
                         RK_U32 add_size =  pkt_impl->length + 1 - p_strm->nalu_max_size;
@@ -844,10 +925,13 @@ MPP_RET parse_prepare_avcC_data(H264dInputCtx_t *p_Inp, H264dCurCtx_t *p_Cur)
     }
     //!< one frame end
     if (p_Cur->p_Dec->is_new_frame) {
+        if (p_strm->tmp_offset)
+            clear_extra_header(p_strm);
         //!< add an empty nalu to tell frame end
         FUN_CHECK(ret = add_empty_nalu(p_strm));
         //!< reset curstream parameters
         p_strm->head_offset = 0;
+        p_strm->first_mb_in_slice = 0;
         p_Cur->p_Inp->task_valid = 1;
         p_Cur->p_Dec->is_new_frame = 0;
 
@@ -916,6 +1000,9 @@ MPP_RET parse_loop(H264_DecCtx_t *p_Dec)
                 p_Dec->next_state = SliceSTATE_InitPicture;
             }  else if (p_Dec->nalu_ret == MvcDisAble) {
                 H264D_LOG("xxxxxxxx MVC disable");
+                goto __FAILED;
+            } else if (p_Dec->nalu_ret == NaluNotSupport) {
+                H264D_LOG("NALU not support, abort decoding");
                 goto __FAILED;
             } else {
                 p_Dec->next_state = SliceSTATE_ReadNalu;

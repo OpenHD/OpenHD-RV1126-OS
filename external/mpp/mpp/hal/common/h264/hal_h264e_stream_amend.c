@@ -19,12 +19,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "mpp_mem.h"
 #include "mpp_common.h"
+#include "mpp_dmabuf.h"
+#include "mpp_packet_impl.h"
+
 #include "mpp_enc_cfg.h"
 #include "mpp_enc_refs.h"
-#include "mpp_mem.h"
+
 #include "hal_h264e_debug.h"
 #include "hal_h264e_stream_amend.h"
+
 #include "h264e_sps.h"
 #include "h264e_pps.h"
 #include "h264e_slice.h"
@@ -95,11 +101,15 @@ MPP_RET h264e_vepu_stream_amend_config(HalH264eVepuStreamAmend *ctx,
                                        H264eSlice *slice, H264ePrefixNal *prefix)
 {
     MppEncRefCfgImpl *ref = (MppEncRefCfgImpl *)cfg->ref_cfg;
+    MppEncH264Cfg    *h264 = &cfg->codec.h264;
+    MppEncH264HwCfg  *hw_cfg = &h264->hw_cfg;
 
     if (ref->lt_cfg_cnt || ref->st_cfg_cnt > 1 ||
-        cfg->codec.h264.hw_poc_type != cfg->codec.h264.poc_type) {
+        hw_cfg->hw_poc_type != h264->poc_type ||
+        hw_cfg->hw_log2_max_frame_num_minus4 != h264->log2_max_frame_num) {
         ctx->enable = 1;
         ctx->slice_enabled = 0;
+        ctx->diable_split_out = 1;
 
         if (NULL == ctx->dst_buf)
             ctx->dst_buf = mpp_calloc(RK_U8, ctx->buf_size);
@@ -125,13 +135,12 @@ MPP_RET h264e_vepu_stream_amend_config(HalH264eVepuStreamAmend *ctx,
     return MPP_OK;
 }
 
-MPP_RET h264e_vepu_stream_amend_proc(HalH264eVepuStreamAmend *ctx, RK_U32 poc_type)
+MPP_RET h264e_vepu_stream_amend_proc(HalH264eVepuStreamAmend *ctx, MppEncH264HwCfg *hw_cfg)
 {
     H264ePrefixNal *prefix = ctx->prefix;
     H264eSlice *slice = ctx->slice;
     MppPacket pkt = ctx->packet;
     RK_U8 *p = mpp_packet_get_pos(pkt);
-    RK_S32 size = mpp_packet_get_size(pkt);
     RK_S32 base = ctx->buf_base;
     RK_S32 len = ctx->old_length;
     RK_S32 hw_len_bit = 0;
@@ -147,10 +156,18 @@ MPP_RET h264e_vepu_stream_amend_proc(HalH264eVepuStreamAmend *ctx, RK_U32 poc_ty
     RK_S32 final_len = 0;
     RK_S32 last_slice = 0;
     const MppPktSeg *seg = mpp_packet_get_segment_info(pkt);
+
     if (seg) {
         while (seg && seg->type != 1 && seg->type != 5) {
             seg = seg->next;
         }
+    }
+
+    {
+        MppBuffer buf = mpp_packet_get_buffer(pkt);
+        RK_S32 fd = mpp_buffer_get_fd(buf);
+
+        mpp_dmabuf_sync_partial_begin(fd, 1, base, len, __FUNCTION__);
     }
 
     {
@@ -179,7 +196,7 @@ MPP_RET h264e_vepu_stream_amend_proc(HalH264eVepuStreamAmend *ctx, RK_U32 poc_ty
         tail_0bit = 0;
         // copy hw stream to stream buffer first
         if (slice->is_multi_slice) {
-            if (!seg) {
+            if ((!seg) || ctx->diable_split_out) {
                 nal_len = get_next_nal(p, &len);
                 last_slice = (len == 0);
             } else {
@@ -214,14 +231,31 @@ MPP_RET h264e_vepu_stream_amend_proc(HalH264eVepuStreamAmend *ctx, RK_U32 poc_ty
         H264eSlice slice_rd;
 
         memcpy(&slice_rd, slice, sizeof(slice_rd));
-        slice_rd.log2_max_frame_num = 16;
-        slice_rd.pic_order_cnt_type = poc_type;
 
-        hw_len_bit = h264e_slice_read(&slice_rd, ctx->src_buf, size);
+        /* update slice by hw_cfg */
+        slice_rd.pic_order_cnt_type = hw_cfg->hw_poc_type;
+        slice_rd.log2_max_frame_num = hw_cfg->hw_log2_max_frame_num_minus4 + 4;
+
+        if (ctx->reorder) {
+            slice_rd.reorder = ctx->reorder;
+            h264e_reorder_init(slice_rd.reorder);
+        }
+        if (ctx->marking) {
+            slice_rd.marking = ctx->marking;
+            h264e_marking_init(slice_rd.marking);
+        }
+
+        hw_len_bit = h264e_slice_read(&slice_rd, ctx->src_buf, nal_len);
 
         // write new header to header buffer
         slice->qp_delta = slice_rd.qp_delta;
         slice->first_mb_in_slice = slice_rd.first_mb_in_slice;
+
+        if (ctx->reorder)
+            slice->reorder = slice_rd.reorder;
+        if (ctx->marking)
+            slice->marking = slice_rd.marking;
+
         sw_len_bit = h264e_slice_write(slice, dst_buf, buf_size);
 
         hw_len_byte = (hw_len_bit + 7) / 8;
@@ -298,9 +332,20 @@ MPP_RET h264e_vepu_stream_amend_sync_ref_idc(HalH264eVepuStreamAmend *ctx)
     RK_S32 base = ctx->buf_base;
     RK_S32 len = ctx->old_length;
     RK_U8 *p = mpp_packet_get_pos(pkt) + base;
-    RK_U8 val = p[4];
-    RK_S32 hw_nal_ref_idc = (val >> 5) & 0x3;
-    RK_S32 sw_nal_ref_idc = slice->nal_reference_idc;
+    RK_U8 val = 0;
+    RK_S32 hw_nal_ref_idc = 0;
+    RK_S32 sw_nal_ref_idc = 0;
+
+    {
+        MppBuffer buf = mpp_packet_get_buffer(pkt);
+        RK_S32 fd = mpp_buffer_get_fd(buf);
+
+        mpp_dmabuf_sync_partial_begin(fd, 1, base, len, __FUNCTION__);
+    }
+
+    val = p[4];
+    hw_nal_ref_idc = (val >> 5) & 0x3;
+    sw_nal_ref_idc = slice->nal_reference_idc;
 
     if (hw_nal_ref_idc == sw_nal_ref_idc)
         return MPP_OK;

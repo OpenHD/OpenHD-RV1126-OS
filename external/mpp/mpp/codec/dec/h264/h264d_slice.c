@@ -17,12 +17,15 @@
 
 #define MODULE_TAG "h264d_slice"
 
+#include <string.h>
+
 #include "mpp_mem.h"
 
 #include "h264d_global.h"
 #include "h264d_slice.h"
 #include "h264d_sps.h"
 #include "h264d_pps.h"
+#include "h2645d_sei.h"
 
 #define PIXW_1080P      (1920)
 #define PIXH_1080P      (1088)
@@ -163,11 +166,13 @@ static MPP_RET dec_ref_pic_marking(H264_SLICE_t *pSlice)
     RK_U32 val = 0;
     MPP_RET ret = MPP_ERR_UNKNOW;
     RK_U32 drpm_used_bits = 0;
+    RK_U32 emulation_prevention = 0;
     H264_DRPM_t *tmp_drpm = NULL, *tmp_drpm2 = NULL;
     H264dVideoCtx_t *p_Vid = pSlice->p_Vid;
     BitReadCtx_t *p_bitctx = &pSlice->p_Cur->bitctx;
 
     drpm_used_bits = p_bitctx->used_bits;
+    emulation_prevention = p_bitctx->emulation_prevention_bytes_;
     pSlice->drpm_used_bitlen = 0;
 
     if (pSlice->idr_flag ||
@@ -220,7 +225,11 @@ static MPP_RET dec_ref_pic_marking(H264_SLICE_t *pSlice)
             }
         }
     }
-    pSlice->drpm_used_bitlen = p_bitctx->used_bits - drpm_used_bits;
+
+    // need to minus emulation prevention bytes(0x000003) we met
+    emulation_prevention = p_bitctx->emulation_prevention_bytes_ - emulation_prevention;
+    pSlice->drpm_used_bitlen = p_bitctx->used_bits - drpm_used_bits - (emulation_prevention * 8);
+
     return ret = MPP_OK;
 __BITREAD_ERR:
     ret = p_bitctx->ret;
@@ -234,8 +243,7 @@ static void init_slice_parmeters(H264_SLICE_t *currSlice)
     H264_Nalu_t    *cur_nalu = &currSlice->p_Cur->nalu;
 
     //--- init slice syntax
-    currSlice->idr_flag = ((cur_nalu->nalu_type == H264_NALU_TYPE_IDR)
-                           || (currSlice->mvcExt.valid && !currSlice->mvcExt.non_idr_flag));
+    currSlice->idr_flag = cur_nalu->nalu_type == H264_NALU_TYPE_IDR;
     currSlice->nal_reference_idc = cur_nalu->nal_reference_idc;
     //!< set ref flag and dpb error flag
     {
@@ -275,18 +283,31 @@ static MPP_RET check_sps_pps(H264_SPS_t *sps, H264_subSPS_t *subset_sps,
     ret |= (sps->log2_max_pic_order_cnt_lsb_minus4 > 12);
     ret |= (sps->num_ref_frames_in_pic_order_cnt_cycle > 255);
     ret |= (sps->max_num_ref_frames > 16);
+    ret |= (sps->qpprime_y_zero_transform_bypass_flag == 1);
+
+    if (ret) {
+        H264D_ERR("sps has error, sps_id=%d", sps->seq_parameter_set_id);
+        goto __FAILED;
+    }
 
     if (hw_info && hw_info->cap_8k)
         max_mb_width  = MAX_MBW_8Kx4K * hw_info->cap_core_num;
     else if (hw_info && hw_info->cap_4k)
         max_mb_width  = MAX_MBW_4Kx2K;
 
-    ret |= (sps->pic_width_in_mbs_minus1 < 3 || sps->pic_width_in_mbs_minus1 > max_mb_width);
-
+    ret |= (sps->pic_width_in_mbs_minus1 < 3);
     if (ret) {
-        H264D_ERR("sps has error, sps_id=%d", sps->seq_parameter_set_id);
+        H264D_ERR("sps %d too small width %d\n", sps->seq_parameter_set_id,
+                  (sps->pic_width_in_mbs_minus1 + 1) * 16);
         goto __FAILED;
     }
+    ret |= (sps->pic_width_in_mbs_minus1 > max_mb_width);
+    if (ret) {
+        H264D_ERR("width %d is larger than soc max support %d\n",
+                  (sps->pic_width_in_mbs_minus1 + 1) * 16, max_mb_width * 16);
+        goto __FAILED;
+    }
+
     if (subset_sps) { //!< MVC
         ret |= (subset_sps->num_views_minus1 != 1);
         if (subset_sps->num_anchor_refs_l0[0] > 0)
@@ -331,8 +352,7 @@ static MPP_RET set_slice_user_parmeters(H264_SLICE_t *currSlice)
     H264dVideoCtx_t *p_Vid = currSlice->p_Vid;
 
     //!< use parameter set
-    if (currSlice->pic_parameter_set_id >= 0 &&
-        currSlice->pic_parameter_set_id < MAXPPS) {
+    if (currSlice->pic_parameter_set_id < MAXPPS) {
         cur_pps = p_Vid->ppsSet[currSlice->pic_parameter_set_id];
         cur_pps = (cur_pps && cur_pps->Valid) ? cur_pps : NULL;
     }
@@ -340,7 +360,8 @@ static MPP_RET set_slice_user_parmeters(H264_SLICE_t *currSlice)
 
     if (currSlice->mvcExt.valid) {
         cur_subsps = p_Vid->subspsSet[cur_pps->seq_parameter_set_id];
-        if (cur_subsps && cur_subsps->Valid) {
+        // only num view(except base view) > 0, need to combine view id
+        if (cur_subsps && cur_subsps->Valid && cur_subsps->num_views_minus1 > 0) {
             cur_sps = &cur_subsps->sps;
             if ((RK_S32)currSlice->mvcExt.view_id == cur_subsps->view_id[0]) { // combine subsps to sps
                 p_Vid->active_mvc_sps_flag = 0;
@@ -442,10 +463,12 @@ MPP_RET process_slice(H264_SLICE_t *currSlice)
 {
     RK_U32 temp = 0;
     RK_U32 poc_used_bits = 0;
+    RK_U32 emulation_prevention = 0;
     MPP_RET ret = MPP_ERR_UNKNOW;
     H264dVideoCtx_t *p_Vid = currSlice->p_Vid;
     H264dCurCtx_t *p_Cur = currSlice->p_Cur;
     BitReadCtx_t *p_bitctx = &p_Cur->bitctx;
+    RecoveryPoint *recovery = &p_Vid->recovery;
 
     //!< initial value
     currSlice->p_Dpb_layer[0] = p_Vid->p_Dpb_layer[0];
@@ -465,6 +488,20 @@ MPP_RET process_slice(H264_SLICE_t *currSlice)
     //!< read rest slice header syntax
     {
         READ_BITS(p_bitctx, currSlice->active_sps->log2_max_frame_num_minus4 + 4, &currSlice->frame_num);
+
+        if (recovery->valid_flag) {
+            if (!recovery->first_frm_valid) {
+                recovery->first_frm_id = currSlice->frame_num;
+                recovery->first_frm_valid = 1;
+                recovery->recovery_pic_id = recovery->first_frm_id + recovery->recovery_frame_cnt;
+                H264D_DBG(H264D_DBG_SEI, "First recovery frame found, frame_num %d", currSlice->frame_num);
+            } else {
+                // It may be too early to reset recovery point info when frame_num is wrapped
+                if (recovery->recovery_pic_id % p_Vid->max_frame_num <= currSlice->frame_num)
+                    memset(&p_Vid->recovery, 0, sizeof(RecoveryPoint));
+            }
+        }
+
         if (currSlice->active_sps->frame_mbs_only_flag) { //!< user in_slice info
             p_Vid->structure = FRAME;
             currSlice->field_pic_flag = 0;
@@ -480,13 +517,15 @@ MPP_RET process_slice(H264_SLICE_t *currSlice)
             }
         }
         currSlice->structure = p_Vid->structure;
-        currSlice->mb_aff_frame_flag = currSlice->active_sps->mb_adaptive_frame_field_flag;
+        currSlice->mb_aff_frame_flag = currSlice->active_sps->mb_adaptive_frame_field_flag &&
+                                       !currSlice->field_pic_flag;
         if (currSlice->idr_flag) {
             READ_UE(p_bitctx, &currSlice->idr_pic_id);
         } else if (currSlice->svc_extension_flag == 0 && currSlice->mvcExt.non_idr_flag == 0) {
             READ_UE(p_bitctx, &currSlice->idr_pic_id);
         }
         poc_used_bits = p_bitctx->used_bits; //!< init poc used bits
+        emulation_prevention = p_bitctx->emulation_prevention_bytes_;
         if (currSlice->active_sps->pic_order_cnt_type == 0) {
             READ_BITS(p_bitctx, currSlice->active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, &currSlice->pic_order_cnt_lsb);
             if (currSlice->p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag == 1
@@ -510,7 +549,10 @@ MPP_RET process_slice(H264_SLICE_t *currSlice)
                 currSlice->delta_pic_order_cnt[1] = 0;
             }
         }
-        currSlice->poc_used_bitlen = p_bitctx->used_bits - poc_used_bits; //!< calculate poc used bit length
+
+        // need to minus emulation prevention bytes(0x000003) we met
+        emulation_prevention = p_bitctx->emulation_prevention_bytes_ - emulation_prevention;
+        currSlice->poc_used_bitlen = p_bitctx->used_bits - poc_used_bits - (emulation_prevention * 8); //!< calculate poc used bit length
         //!< redundant_pic_cnt is missing here
         ASSERT(currSlice->p_Vid->active_pps->redundant_pic_cnt_present_flag == 0); // add by dw, high 4:2:2 profile not support
         if (currSlice->p_Vid->active_pps->redundant_pic_cnt_present_flag) {

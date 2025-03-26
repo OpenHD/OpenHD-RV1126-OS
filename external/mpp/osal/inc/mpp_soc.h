@@ -41,29 +41,32 @@ typedef enum RockchipSocType_e {
     ROCKCHIP_SOC_PX30,
     ROCKCHIP_SOC_RK1808,
     ROCKCHIP_SOC_RK3566,
+    ROCKCHIP_SOC_RK3567,
     ROCKCHIP_SOC_RK3568,
     ROCKCHIP_SOC_RK3588,
     ROCKCHIP_SOC_RK3528,
+    ROCKCHIP_SOC_RK3562,
     ROCKCHIP_SOC_BUTT,
 } RockchipSocType;
 
 typedef struct MppDecHwCap_t {
     RK_U32          cap_coding;
 
-    MppClientType   type            : 8;
+    MppClientType   type                : 8;
 
-    RK_U32          cap_fbc         : 4;
-    RK_U32          cap_4k          : 1;
-    RK_U32          cap_8k          : 1;
-    RK_U32          cap_colmv_buf   : 1;
-    RK_U32          cap_hw_h265_rps : 1;
-    RK_U32          cap_hw_vp9_prob : 1;
-    RK_U32          cap_jpg_pp_out  : 1;
-    RK_U32          cap_10bit       : 1;
-    RK_U32          cap_down_scale  : 1;
-    RK_U32          cap_lmt_linebuf : 1;
-    RK_U32          cap_core_num    : 3;
-    RK_U32          reserved        : 9;
+    RK_U32          cap_fbc             : 4;
+    RK_U32          cap_4k              : 1;
+    RK_U32          cap_8k              : 1;
+    RK_U32          cap_colmv_compress  : 1;
+    RK_U32          cap_hw_h265_rps     : 1;
+    RK_U32          cap_hw_vp9_prob     : 1;
+    RK_U32          cap_jpg_pp_out      : 1;
+    RK_U32          cap_10bit           : 1;
+    RK_U32          cap_down_scale      : 1;
+    RK_U32          cap_lmt_linebuf     : 1;
+    RK_U32          cap_core_num        : 3;
+    RK_U32          cap_hw_jpg_fix      : 1;
+    RK_U32          reserved            : 8;
 } MppDecHwCap;
 
 typedef struct MppEncHwCap_t {

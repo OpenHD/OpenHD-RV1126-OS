@@ -18,6 +18,7 @@
 #define __MPP_BUF_SLOT_H__
 
 #include "mpp_frame.h"
+#include "mpp_callback.h"
 
 /*
  * mpp_dec will alloc 18 decoded picture buffer slot
@@ -130,6 +131,7 @@ RK_U32  mpp_buf_slot_is_changed(MppBufSlots slots);
 MPP_RET mpp_buf_slot_ready(MppBufSlots slots);
 size_t  mpp_buf_slot_get_size(MppBufSlots slots);
 RK_S32  mpp_buf_slot_get_count(MppBufSlots slots);
+MPP_RET mpp_buf_slot_set_callback(MppBufSlots slots, MppCbCtx *cb_ctx);
 /*
  * called by parser
  *
@@ -238,10 +240,17 @@ typedef enum SlotsPropType_e {
     SLOTS_COUNT,
     SLOTS_SIZE,
     SLOTS_FRAME_INFO,
+    SLOTS_HAL_FBC_ADJ,
     SLOTS_PROP_BUTT,
 } SlotsPropType;
 
 typedef RK_U32 (*AlignFunc)(RK_U32 val);
+/* for fbc mode change on info change and external user set frame info */
+typedef void (*HalFbcAdjFunc)(MppBufSlots slots, MppFrame frame, RK_U32 expand);
+typedef struct SlotHalFbcAdjCfg_t {
+    HalFbcAdjFunc   func;
+    RK_U32          expand;
+} SlotHalFbcAdjCfg;
 
 RK_U32 mpp_slots_is_empty(MppBufSlots slots, SlotQueueType type);
 RK_S32  mpp_slots_get_used_count(MppBufSlots slots);

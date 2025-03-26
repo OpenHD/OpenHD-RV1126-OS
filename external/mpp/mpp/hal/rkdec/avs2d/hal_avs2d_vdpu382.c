@@ -95,6 +95,11 @@ static RK_U32 avs2d_len_align(RK_U32 val)
     return (2 * MPP_ALIGN(val, 16));
 }
 
+static RK_U32 avs2d_hor_align_64(RK_U32 val)
+{
+    return MPP_ALIGN(val, 64);
+}
+
 static MPP_RET prepare_header(Avs2dHalCtx_t *p_hal, RK_U8 *data, RK_U32 len)
 {
     RK_U32 i, j;
@@ -235,6 +240,8 @@ static MPP_RET init_common_regs(Vdpu382Avs2dRegSet *regs)
     common->reg015.rlc_mode = 0;
 
     common->reg011.buf_empty_en = 1;
+    common->reg011.err_head_fill_e = 1;
+    common->reg011.err_colmv_fill_e = 1;
 
     common->reg010.dec_e = 1;
 
@@ -246,35 +253,103 @@ static MPP_RET init_common_regs(Vdpu382Avs2dRegSet *regs)
     common->reg024.cabac_err_en_lowbits = 0xffffffdf;
     common->reg025.cabac_err_en_highbits = 0x3dffffff;
 
-    common->reg026.swreg_block_gating_e = 0xfffff;
+    common->reg026.inter_auto_gating_e = 1;
+    common->reg026.filterd_auto_gating_e = 1;
+    common->reg026.strmd_auto_gating_e = 1;
+    common->reg026.mcp_auto_gating_e = 1;
+    common->reg026.busifd_auto_gating_e = 1;
+    common->reg026.dec_ctrl_auto_gating_e = 1;
+    common->reg026.intra_auto_gating_e = 1;
+    common->reg026.mc_auto_gating_e = 1;
+    common->reg026.transd_auto_gating_e = 1;
+    common->reg026.sram_auto_gating_e = 1;
+    common->reg026.cru_auto_gating_e = 1;
     common->reg026.reg_cfg_gating_en = 1;
-    common->reg032_timeout_threshold = 0x0fffffff;
+
+    common->reg032_timeout_threshold = 0x3fffff;
 
     common->reg011.dec_clkgate_e = 1;
 
     common->reg013.stmerror_waitdecfifo_empty = 1;
     common->reg012.colmv_compress_en = COLMV_COMPRESS_EN;
-    common->reg012.wr_ddr_align_en = 1;
     common->reg012.info_collect_en = 1;
     common->reg012.error_info_en = 0;
 
     return MPP_OK;
 }
 
-//TODO calc rcb buffer size;
-/*
 static void avs2d_refine_rcb_size(Vdpu382RcbInfo *rcb_info,
                                   Vdpu382Avs2dRegSet *hw_regs,
                                   RK_S32 width, RK_S32 height, void *dxva)
 {
-    (void) rcb_info;
-    (void) hw_regs;
-    (void) width;
     (void) height;
-    (void) dxva;
+    Avs2dSyntax_t *syntax = dxva;
+    RK_U8 ctu_size = 1 << syntax->pp.lcu_size;
+    RK_U32 chroma_fmt_idc = syntax->pp.chroma_format_idc;
+    RK_U8 bit_depth = syntax->pp.bit_depth_chroma_minus8 + 8;
+    RK_U32 rcb_bits = 0;
+
+    width = MPP_ALIGN(width, ctu_size);
+
+    /* RCB_STRMD_ROW */
+    if (width >= 8192) {
+        RK_U32 factor = 64 / ctu_size;
+
+        rcb_bits = (MPP_ALIGN(width, ctu_size) + factor - 1) / factor * 24;
+    } else
+        rcb_bits = 0;
+    rcb_info[RCB_STRMD_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_TRANSD_ROW */
+    if (width >= 8192)
+        rcb_bits = (MPP_ALIGN(width - 8192, 4) << 1);
+    else
+        rcb_bits = 0;
+    rcb_info[RCB_TRANSD_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_TRANSD_COL */
+    rcb_info[RCB_TRANSD_COL].size = 0;
+
+    /* RCB_INTER_ROW */
+    rcb_bits = width * 21;
+    rcb_info[RCB_INTER_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_INTER_COL */
+    rcb_info[RCB_INTER_COL].size = 0;
+
+    /* RCB_INTRA_ROW */
+    rcb_bits = width * ((chroma_fmt_idc ? 1 : 0) + 1) * 11;
+    rcb_info[RCB_INTRA_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_DBLK_ROW */
+    if (chroma_fmt_idc == 1 ) {
+        if (ctu_size == 32)
+            rcb_bits = width * ( 4 + 8 * bit_depth);
+        else
+            rcb_bits = width * ( 2 + 8 * bit_depth);
+    } else
+        rcb_bits = 0;
+    rcb_info[RCB_DBLK_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_SAO_ROW */
+    if (chroma_fmt_idc == 1 || chroma_fmt_idc == 2) {
+        rcb_bits = width * (128 / ctu_size + 2 * bit_depth);
+    } else {
+        rcb_bits = width * (128 / ctu_size + 3 * bit_depth);
+    }
+    rcb_info[RCB_SAO_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_FBC_ROW */
+    if (hw_regs->common.reg012.fbc_e)
+        rcb_bits = width * 4 * bit_depth;
+    else
+        rcb_bits = 0;
+    rcb_info[RCB_FBC_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
+    /* RCB_FILT_COL */
+    rcb_info[RCB_FILT_COL].size = 0;
     return;
 }
-*/
 
 static void hal_avs2d_rcb_info_update(void *hal, Vdpu382Avs2dRegSet *hw_regs)
 {
@@ -286,10 +361,8 @@ static void hal_avs2d_rcb_info_update(void *hal, Vdpu382Avs2dRegSet *hw_regs)
     RK_S32 i = 0;
     RK_S32 loop = p_hal->fast_mode ? MPP_ARRAY_ELEMS(reg_ctx->reg_buf) : 1;
 
-    (void) hw_regs;
-
     reg_ctx->rcb_buf_size = vdpu382_get_rcb_buf_size(reg_ctx->rcb_info, width, height);
-    //avs2d_refine_rcb_size(reg_ctx->rcb_info, hw_regs, width, height, (void *)&p_hal->syntax);
+    avs2d_refine_rcb_size(reg_ctx->rcb_info, hw_regs, width, height, (void *)&p_hal->syntax);
 
     for (i = 0; i < loop; i++) {
         MppBuffer rcb_buf = NULL;
@@ -336,12 +409,12 @@ static MPP_RET fill_registers(Avs2dHalCtx_t *p_hal, Vdpu382Avs2dRegSet *p_regs, 
         AVS2D_HAL_TRACE("is_fbc %d y_virstride %d, hor_virstride %d, ver_virstride %d\n", is_fbc, y_virstride, hor_virstride, ver_virstride);
 
         if (is_fbc) {
-            RK_U32 pixel_width = MPP_ALIGN(mpp_frame_get_width(mframe), 64);
-            RK_U32 fbd_offset = MPP_ALIGN(pixel_width * (ver_virstride + 16) / 16, SZ_4K);
+            RK_U32 fbc_hdr_stride = mpp_frame_get_fbc_hdr_stride(mframe);
+            RK_U32 fbd_offset = MPP_ALIGN(fbc_hdr_stride * (ver_virstride + 16) / 16, SZ_4K);
 
             common->reg012.fbc_e = 1;
-            common->reg018.y_hor_virstride = pixel_width / 16;
-            common->reg019.uv_hor_virstride = pixel_width / 16;
+            common->reg018.y_hor_virstride = fbc_hdr_stride / 16;
+            common->reg019.uv_hor_virstride = fbc_hdr_stride / 16;
             common->reg020_fbc_payload_off.payload_st_offset = fbd_offset >> 4;
         } else {
             common->reg012.fbc_e = 0;
@@ -371,6 +444,7 @@ static MPP_RET fill_registers(Avs2dHalCtx_t *p_hal, Vdpu382Avs2dRegSet *p_regs, 
         RK_S32 valid_slot = -1;
         RK_U32 *ref_low = (RK_U32 *)&p_regs->avs2d_param.reg99;
         RK_U32 *ref_hight = (RK_U32 *)&p_regs->avs2d_param.reg100;
+        RK_U32 err_ref_base = 0;
 
         AVS2D_HAL_TRACE("num of ref %d", refp->ref_pic_num);
 
@@ -382,47 +456,63 @@ static MPP_RET fill_registers(Avs2dHalCtx_t *p_hal, Vdpu382Avs2dRegSet *p_regs, 
             break;
         }
 
-        for (i = 0; i < MAX_REF_NUM; i++) {
-            if (i < refp->ref_pic_num) {
-                MppFrame frame_ref = NULL;
+        for (i = 0; i < refp->ref_pic_num; i++) {
+            MppFrame frame_ref = NULL;
 
-                RK_S32 slot_idx = task_dec->refer[i] < 0 ? valid_slot : task_dec->refer[i];
+            RK_S32 slot_idx = task_dec->refer[i] < 0 ? valid_slot : task_dec->refer[i];
 
-                if (slot_idx < 0) {
-                    AVS2D_HAL_TRACE("missing ref, could not found valid ref");
-                    return ret = MPP_ERR_UNKNOW;
-                }
+            if (slot_idx < 0) {
+                AVS2D_HAL_DBG(AVS2D_HAL_DBG_ERROR, "missing ref, could not found valid ref");
+                task->dec.flags.ref_err = 1;
+                return ret = MPP_ERR_UNKNOW;
+            }
 
-                mpp_buf_slot_get_prop(p_hal->frame_slots, slot_idx, SLOT_FRAME_PTR, &frame_ref);
+            mpp_buf_slot_get_prop(p_hal->frame_slots, slot_idx, SLOT_FRAME_PTR, &frame_ref);
 
-                if (frame_ref) {
-                    RK_U32 frm_flag = 1 << 3;
+            if (frame_ref) {
+                RK_U32 frm_flag = 1 << 3;
 
-                    if (pp->bottom_field_picture_flag)
-                        frm_flag |= 1 << 2;
+                if (pp->bottom_field_picture_flag)
+                    frm_flag |= 1 << 2;
 
-                    if (pp->field_coded_sequence)
-                        frm_flag |= 1;
+                if (pp->field_coded_sequence)
+                    frm_flag |= 1;
 
-                    ref_flag |= frm_flag << (i * 8);
+                ref_flag |= frm_flag << (i * 8);
 
-                    p_regs->avs2d_addr.ref_base[i] = get_frame_fd(p_hal, slot_idx);
-                    mv_buf = hal_bufs_get_buf(p_hal->cmv_bufs, slot_idx);
-                    p_regs->avs2d_addr.colmv_base[i] = mpp_buffer_get_fd(mv_buf->buf[0]);
+                p_regs->avs2d_addr.ref_base[i] = get_frame_fd(p_hal, slot_idx);
+                mv_buf = hal_bufs_get_buf(p_hal->cmv_bufs, slot_idx);
+                p_regs->avs2d_addr.colmv_base[i] = mpp_buffer_get_fd(mv_buf->buf[0]);
 
-                    p_regs->avs2d_param.reg67_098_ref_poc[i] = mpp_frame_get_poc(frame_ref);
+                p_regs->avs2d_param.reg67_098_ref_poc[i] = mpp_frame_get_poc(frame_ref);
+                if (!err_ref_base && !mpp_frame_get_errinfo(frame_ref))
+                    err_ref_base = p_regs->avs2d_addr.ref_base[i];
 
-                    AVS2D_HAL_TRACE("ref_base[%d] index=%d, fd = %d, colmv %d, poc %d",
-                                    i, slot_idx, p_regs->avs2d_addr.ref_base[i],
-                                    p_regs->avs2d_addr.colmv_base[i], p_regs->avs2d_param.reg67_098_ref_poc[i]);
-                }
+                AVS2D_HAL_TRACE("ref_base[%d] index=%d, fd = %d, colmv %d, poc %d",
+                                i, slot_idx, p_regs->avs2d_addr.ref_base[i],
+                                p_regs->avs2d_addr.colmv_base[i], p_regs->avs2d_param.reg67_098_ref_poc[i]);
+            }
+        }
+
+        if (p_hal->syntax.refp.scene_ref_enable && p_hal->syntax.refp.scene_ref_slot_idx >= 0) {
+            MppFrame scene_ref = NULL;
+            RK_S32 replace_idx = p_hal->syntax.refp.scene_ref_replace_pos;
+            RK_S32 slot_idx = p_hal->syntax.refp.scene_ref_slot_idx;
+
+            mpp_buf_slot_get_prop(p_hal->frame_slots, slot_idx, SLOT_FRAME_PTR, &scene_ref);
+
+            if (scene_ref) {
+                p_regs->avs2d_addr.ref_base[replace_idx] = get_frame_fd(p_hal, slot_idx);
+                mv_buf = hal_bufs_get_buf(p_hal->cmv_bufs, slot_idx);
+                p_regs->avs2d_addr.colmv_base[replace_idx] = mpp_buffer_get_fd(mv_buf->buf[0]);
+                p_regs->avs2d_param.reg67_098_ref_poc[replace_idx] = mpp_frame_get_poc(scene_ref);
             }
         }
 
         *ref_low = (RK_U32) (ref_flag & 0xffffffff);
         *ref_hight = (RK_U32) ((ref_flag >> 32) & 0xffffffff);
 
-        p_regs->common_addr.reg132_error_ref_base = p_regs->avs2d_addr.ref_base[0];
+        p_regs->common_addr.reg132_error_ref_base = err_ref_base;
     }
 
     // set rlc
@@ -435,6 +525,17 @@ static MPP_RET fill_registers(Avs2dHalCtx_t *p_hal, Vdpu382Avs2dRegSet *p_regs, 
 
     if (MPP_FRAME_FMT_IS_HDR(mpp_frame_get_fmt(mframe)) && p_hal->cfg->base.enable_hdr_meta)
         fill_hdr_meta_to_frame(mframe, HDR_AVS2);
+
+    /* set scale down info */
+    if (mpp_frame_get_thumbnail_en(mframe)) {
+        p_regs->avs2d_addr.scale_down_luma_base = p_regs->common_addr.reg130_decout_base;
+        p_regs->avs2d_addr.scale_down_chorme_base = p_regs->common_addr.reg130_decout_base;
+        vdpu382_setup_down_scale(mframe, p_hal->dev, &p_regs->common);
+    } else {
+        p_regs->avs2d_addr.scale_down_luma_base = 0;
+        p_regs->avs2d_addr.scale_down_chorme_base = 0;
+        p_regs->common.reg012.scale_down_en = 0;
+    }
 
     return ret;
 }
@@ -511,6 +612,11 @@ MPP_RET hal_avs2d_vdpu382_init(void *hal, MppHalCfg *cfg)
         reg_ctx->sclst_offset = reg_ctx->reg_buf[0].offset_sclst;
     }
 
+    if (MPP_FRAME_FMT_IS_FBC(cfg->cfg->base.out_fmt))
+        mpp_slots_set_prop(p_hal->frame_slots, SLOTS_HOR_ALIGN, avs2d_hor_align_64);
+    else
+        mpp_slots_set_prop(p_hal->frame_slots, SLOTS_HOR_ALIGN, avs2d_hor_align);
+
     mpp_slots_set_prop(p_hal->frame_slots, SLOTS_HOR_ALIGN, avs2d_hor_align);
     mpp_slots_set_prop(p_hal->frame_slots, SLOTS_VER_ALIGN, avs2d_ver_align);
     mpp_slots_set_prop(p_hal->frame_slots, SLOTS_LEN_ALIGN, avs2d_len_align);
@@ -529,6 +635,7 @@ MPP_RET hal_avs2d_vdpu382_init(void *hal, MppHalCfg *cfg)
 
         mpp_assert(hw_info);
         cfg->hw_info = hw_info;
+        p_hal->hw_info = hw_info;
     }
 
 __RETURN:
@@ -709,9 +816,10 @@ MPP_RET hal_avs2d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     }
 
     vdpu382_setup_statistic(&regs->common, &regs->statistic);
+    mpp_buffer_sync_end(reg_ctx->bufs);
+
     /* enable reference frame usage feedback */
-    regs->statistic.reg265.perf_cnt1_sel = 42;
-    regs->statistic.reg267_perf_cnt1 = 0;
+    regs->statistic.reg265.perf_cnt0_sel = 42;
 
 __RETURN:
     AVS2D_HAL_TRACE("Out. ret %d", ret);
@@ -914,25 +1022,7 @@ MPP_RET hal_avs2d_vdpu382_start(void *hal, HalTaskInfo *task)
         }
 
         // rcb info for sram
-        {
-            RK_U32 i = 0;
-            MppDevRcbInfoCfg rcb_cfg;
-            Vdpu382RcbInfo rcb_info[RCB_BUF_COUNT];
-
-            memcpy(rcb_info, reg_ctx->rcb_info, sizeof(rcb_info));
-            qsort(rcb_info, MPP_ARRAY_ELEMS(rcb_info),
-                  sizeof(rcb_info[0]), vdpu382_compare_rcb_size);
-
-            for (i = 0; i < MPP_ARRAY_ELEMS(rcb_info); i++) {
-                rcb_cfg.reg_idx = rcb_info[i].reg;
-                rcb_cfg.size = rcb_info[i].size;
-
-                if (rcb_cfg.size > 0) {
-                    mpp_dev_ioctl(dev, MPP_DEV_RCB_INFO, &rcb_cfg);
-                } else
-                    break;
-            }
-        }
+        vdpu382_set_rcbinfo(dev, reg_ctx->rcb_info);
 
         if (avs2d_hal_debug & AVS2D_HAL_DBG_IN)
             hal_avs2d_vdpu382_dump_stream(hal, task);
@@ -1096,10 +1186,10 @@ MPP_RET hal_avs2d_vdpu382_wait(void *hal, HalTaskInfo *task)
         else
             param.hard_err = 0;
 
-        task->dec.flags.ref_used = p_regs->statistic.reg267_perf_cnt1;
+        task->dec.flags.ref_used = p_regs->statistic.reg265.link_perf_cnt0;
 
         if (task->dec.flags.ref_miss) {
-            RK_U32 ref_hw_usage = p_regs->statistic.reg267_perf_cnt1;
+            RK_U32 ref_hw_usage = p_regs->statistic.reg265.link_perf_cnt0;
 
             AVS2D_HAL_TRACE("hal frame %d ref miss %x hard_err %d hw_usage %x", p_hal->frame_no,
                             task->dec.flags.ref_miss, param.hard_err, ref_hw_usage);

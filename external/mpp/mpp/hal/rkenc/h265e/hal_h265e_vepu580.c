@@ -26,20 +26,25 @@
 #include "mpp_common.h"
 #include "mpp_frame_impl.h"
 #include "mpp_packet_impl.h"
+#include "mpp_dmabuf.h"
 
 #include "hal_h265e_debug.h"
 #include "h265e_syntax_new.h"
 #include "hal_bufs.h"
 #include "rkv_enc_def.h"
+#include "h265e_dpb.h"
 #include "vepu541_common.h"
 #include "vepu5xx_common.h"
 #include "hal_h265e_vepu580.h"
 #include "hal_h265e_vepu580_reg.h"
 #include "mpp_enc_cb_param.h"
+#include "vepu5xx.h"
 
 #include "mpp_service.h"
 
-#define MAX_TILE_NUM 4
+#define MAX_FRAME_TASK_NUM      2
+#define MAX_TILE_NUM            4
+#define MAX_REGS_SET            ((MAX_FRAME_TASK_NUM) * (MAX_TILE_NUM))
 
 #define hal_h265e_err(fmt, ...) \
     do {\
@@ -73,31 +78,93 @@ typedef struct vepu580_h265_fbk_t {
     RK_U32 st_madi_b16num3;
     RK_U32 st_mb_num;
     RK_U32 st_ctu_num;
-} vepu580_h265_fbk;
+} Vepu580H265Fbk;
+
+typedef struct Vepu580RoiH265BsCfg_t {
+    RK_U8 amv_en        : 1;
+    RK_U8 qp_adj        : 1;
+    RK_U8 force_split   : 1;
+    RK_U8 force_intra   : 2;
+    RK_U8 force_inter   : 2;
+} Vepu580RoiH265BsCfg;
+
+typedef struct Vepu580H265eFrmCfg_t {
+    RK_S32              frame_count;
+    RK_S32              frame_type;
+
+    /* dchs cfg on frame parallel */
+    RK_S32              dchs_curr_idx;
+    RK_S32              dchs_prev_idx;
+
+    /* hal dpb management slot idx */
+    RK_S32              hal_curr_idx;
+    RK_S32              hal_refr_idx;
+
+    /* regs cfg */
+    H265eV580RegSet     *regs_set[MAX_TILE_NUM];
+    H265eV580StatusElem *regs_ret[MAX_TILE_NUM];
+
+    /* hardware return info collection cfg */
+    Vepu580H265Fbk      feedback;
+
+    /* tile buffer */
+    MppBuffer           hw_tile_buf[MAX_TILE_NUM];
+    MppBuffer           hw_tile_stream[MAX_TILE_NUM - 1];
+
+    /* osd cfg */
+    Vepu541OsdCfg       osd_cfg;
+    void                *roi_data;
+
+    /* gdr roi cfg */
+    MppBuffer           roi_base_cfg_buf;
+    void                *roi_base_cfg_sw_buf;
+    RK_S32              roi_base_buf_size;
+
+    /* variable length cfg */
+    MppDevRegOffCfgs    *reg_cfg;
+} Vepu580H265eFrmCfg;
 
 typedef struct H265eV580HalContext_t {
     MppEncHalApi        api;
     MppDev              dev;
-    void                *regs[MAX_TILE_NUM];
-    void                *reg_out[MAX_TILE_NUM];
+    Vepu580H265eFrmCfg  *frms[MAX_FRAME_TASK_NUM];
 
-    vepu580_h265_fbk    feedback;
+    /* current used frame config */
+    Vepu580H265eFrmCfg  *frm;
+
+    /* slice split poll cfg */
+    RK_S32              poll_slice_max;
+    RK_S32              poll_cfg_size;
+
+    /* @frame_cnt starts from ZERO */
+    RK_U32              frame_count;
+
+    /* frame parallel info */
+    RK_S32              task_cnt;
+    RK_S32              task_idx;
+
+    /* dchs cfg */
+    RK_S32              curr_idx;
+    RK_S32              prev_idx;
+
+    /* debug cfg */
     void                *dump_files;
-    RK_U32              frame_cnt_gen_ready;
 
     RK_S32              frame_type;
     RK_S32              last_frame_type;
 
-    /* @frame_cnt starts from ZERO */
-    RK_U32              frame_cnt;
-    Vepu541OsdCfg       osd_cfg;
-    MppDevRegOffCfgs    *reg_cfg;
-    void                *roi_data;
-    MppEncCfgSet        *cfg;
+    MppBufferGroup      roi_grp;
 
+    MppEncCfgSet        *cfg;
+    H265eSyntax_new     *syn;
+    H265eDpb            *dpb;
+
+    /* single frame tile parallel info */
     MppBufferGroup      tile_grp;
-    MppBuffer           hw_tile_buf[MAX_TILE_NUM];
-    MppBuffer           hw_tile_stream[MAX_TILE_NUM - 1];
+    RK_U32              tile_num;
+    RK_U32              tile_parall_en;
+    RK_U32              tile_dump_err;
+
     MppBuffer           buf_pass1;
 
     RK_U32              enc_mode;
@@ -108,30 +175,15 @@ typedef struct H265eV580HalContext_t {
     RK_U8               *src_buf;
     RK_U8               *dst_buf;
     RK_S32              buf_size;
-    RK_U32              frame_num;
     HalBufs             dpb_bufs;
     RK_S32              fbc_header_len;
-    RK_U32              tile_num;
-    RK_U32              tile_parall_en;
-    RK_U32              tile_dump_err;
 
-    RK_S32              poll_slice_max;
-    RK_S32              poll_cfg_size;
     MppDevPollCfg       *poll_cfgs;
     MppCbCtx            *output_cb;
 
     /* finetune */
     void                *tune;
 } H265eV580HalContext;
-
-#define TILE_BUF_SIZE  MPP_ALIGN(128 * 1024, 256)
-
-static RK_U32 klut_weight[24] = {
-    0x50800080, 0x00330000, 0xA1000100, 0x00660000, 0x42000200, 0x00CC0001,
-    0x84000400, 0x01980002, 0x08000800, 0x03300005, 0x10001000, 0x0660000A,
-    0x20002000, 0x0CC00014, 0x40004000, 0x19800028, 0x80008000, 0x33000050,
-    0x00010000, 0x660000A1, 0x00020000, 0xCC000142, 0xFF83FFFF, 0x000001FF
-};
 
 static RK_U32 aq_thd_default[16] = {
     0,  0,  0,  0,
@@ -161,36 +213,6 @@ static RK_U16 lvl16_intra_cst_thd[4] = {2, 6, 16, 36};
 static RK_U8 lvl32_intra_cst_wgt[8] = {23, 22, 21, 20, 22, 24, 26};
 
 static RK_U8 lvl16_intra_cst_wgt[8] = {17, 17, 17, 18, 17, 18, 18};
-
-static RK_U32 lamd_satd_qp[52] = {
-    0x00000183, 0x000001b2, 0x000001e7, 0x00000223, 0x00000266, 0x000002b1, 0x00000305, 0x00000364,
-    0x000003ce, 0x00000445, 0x000004cb, 0x00000562, 0x0000060a, 0x000006c8, 0x0000079c, 0x0000088b,
-    0x00000996, 0x00000ac3, 0x00000c14, 0x00000d8f, 0x00000f38, 0x00001115, 0x0000132d, 0x00001586,
-    0x00001829, 0x00001b1e, 0x00001e70, 0x0000222b, 0x0000265a, 0x00002b0c, 0x00003052, 0x0000363c,
-    0x00003ce1, 0x00004455, 0x00004cb4, 0x00005618, 0x000060a3, 0x00006c79, 0x000079c2, 0x000088ab,
-    0x00009967, 0x0000ac30, 0x0000c147, 0x0000d8f2, 0x0000f383, 0x00011155, 0x000132ce, 0x00015861,
-    0x0001828d, 0x0001b1e4, 0x0001e706, 0x000222ab
-};
-
-static RK_U32 lamd_moda_qp[52] = {
-    0x00000049, 0x0000005c, 0x00000074, 0x00000092, 0x000000b8, 0x000000e8, 0x00000124, 0x00000170,
-    0x000001cf, 0x00000248, 0x000002df, 0x0000039f, 0x0000048f, 0x000005bf, 0x0000073d, 0x0000091f,
-    0x00000b7e, 0x00000e7a, 0x0000123d, 0x000016fb, 0x00001cf4, 0x0000247b, 0x00002df6, 0x000039e9,
-    0x000048f6, 0x00005bed, 0x000073d1, 0x000091ec, 0x0000b7d9, 0x0000e7a2, 0x000123d7, 0x00016fb2,
-    0x0001cf44, 0x000247ae, 0x0002df64, 0x00039e89, 0x00048f5c, 0x0005bec8, 0x00073d12, 0x00091eb8,
-    0x000b7d90, 0x000e7a23, 0x00123d71, 0x0016fb20, 0x001cf446, 0x00247ae1, 0x002df640, 0x0039e88c,
-    0x0048f5c3, 0x005bec81, 0x0073d119, 0x0091eb85
-};
-
-static RK_U32 lamd_modb_qp[52] = {
-    0x00000070, 0x00000089, 0x000000b0, 0x000000e0, 0x00000112, 0x00000160, 0x000001c0, 0x00000224,
-    0x000002c0, 0x00000380, 0x00000448, 0x00000580, 0x00000700, 0x00000890, 0x00000b00, 0x00000e00,
-    0x00001120, 0x00001600, 0x00001c00, 0x00002240, 0x00002c00, 0x00003800, 0x00004480, 0x00005800,
-    0x00007000, 0x00008900, 0x0000b000, 0x0000e000, 0x00011200, 0x00016000, 0x0001c000, 0x00022400,
-    0x0002c000, 0x00038000, 0x00044800, 0x00058000, 0x00070000, 0x00089000, 0x000b0000, 0x000e0000,
-    0x00112000, 0x00160000, 0x001c0000, 0x00224000, 0x002c0000, 0x00380000, 0x00448000, 0x00580000,
-    0x00700000, 0x00890000, 0x00b00000, 0x00e00000
-};
 
 #include "hal_h265e_vepu580_tune.c"
 
@@ -301,7 +323,7 @@ static MPP_RET vepu580_h265_setup_hal_bufs(H265eV580HalContext *ctx)
     MppEncRefCfg ref_cfg = ctx->cfg->ref_cfg;
     MppEncPrepCfg *prep = &ctx->cfg->prep;
     RK_S32 old_max_cnt = ctx->max_buf_cnt;
-    RK_S32 new_max_cnt = 2;
+    RK_S32 new_max_cnt = 4;
 
     hal_h265e_enter();
 
@@ -1344,43 +1366,69 @@ static void vepu580_h265_global_cfg_set(H265eV580HalContext *ctx, H265eV580RegSe
     reg_wgt->fme_sqi_thd0.cime_sad_pu32_th = 16;
     reg_wgt->fme_sqi_thd1.cime_sad_pu64_th = 16;
     reg_wgt->fme_sqi_thd1.move_lambda = 1;
-
-
 }
 
 MPP_RET hal_h265e_v580_deinit(void *hal)
 {
     H265eV580HalContext *ctx = (H265eV580HalContext *)hal;
-    RK_U32 i = 0;
+    RK_S32 i;
 
     hal_h265e_enter();
 
-    for (i = 0; i < MAX_TILE_NUM; i++) {
-        MPP_FREE(ctx->regs[i]);
-        MPP_FREE(ctx->reg_out[i]);
+    for (i = 0; i < ctx->task_cnt; i++) {
+        Vepu580H265eFrmCfg *frm = ctx->frms[i];
+        RK_U32 j;
+
+        if (!frm)
+            continue;
+
+        for (j = 0; j < MAX_TILE_NUM; j++) {
+            MPP_FREE(frm->regs_set[j]);
+            MPP_FREE(frm->regs_ret[j]);
+        }
+
+        for (j = 0; j < MAX_TILE_NUM; j++) {
+            if (frm->hw_tile_buf[j]) {
+                mpp_buffer_put(frm->hw_tile_buf[j]);
+                frm->hw_tile_buf[j] = NULL;
+            }
+        }
+
+        for (j = 0; j < MAX_TILE_NUM - 1; j++) {
+            if (frm->hw_tile_stream[j]) {
+                mpp_buffer_put(frm->hw_tile_stream[j]);
+                frm->hw_tile_stream[j] = NULL;
+            }
+        }
+
+        if (frm->roi_base_cfg_buf) {
+            mpp_buffer_put(frm->roi_base_cfg_buf);
+            frm->roi_base_cfg_buf = NULL;
+            frm->roi_base_buf_size = 0;
+        }
+
+        MPP_FREE(frm->roi_base_cfg_sw_buf);
+
+        if (frm->reg_cfg) {
+            mpp_dev_multi_offset_deinit(frm->reg_cfg);
+            frm->reg_cfg = NULL;
+        }
+
+        MPP_FREE(ctx->frms[i]);
     }
 
     MPP_FREE(ctx->poll_cfgs);
     MPP_FREE(ctx->input_fmt);
     hal_bufs_deinit(ctx->dpb_bufs);
 
-    for (i = 0; i < MAX_TILE_NUM; i++) {
-        if (ctx->hw_tile_buf[i]) {
-            mpp_buffer_put(ctx->hw_tile_buf[i]);
-            ctx->hw_tile_buf[i] = NULL;
-        }
-    }
-
-    for (i = 0; i < MAX_TILE_NUM - 1; i ++) {
-        if (ctx->hw_tile_stream[i]) {
-            mpp_buffer_put(ctx->hw_tile_stream[i]);
-            ctx->hw_tile_stream[i] = NULL;
-        }
-    }
-
     if (ctx->tile_grp) {
         mpp_buffer_group_put(ctx->tile_grp);
         ctx->tile_grp = NULL;
+    }
+
+    if (ctx->roi_grp) {
+        mpp_buffer_group_put(ctx->roi_grp);
+        ctx->roi_grp = NULL;
     }
 
     if (ctx->buf_pass1) {
@@ -1391,11 +1439,6 @@ MPP_RET hal_h265e_v580_deinit(void *hal)
     if (ctx->dev) {
         mpp_dev_deinit(ctx->dev);
         ctx->dev = NULL;
-    }
-
-    if (ctx->reg_cfg) {
-        mpp_dev_multi_offset_deinit(ctx->reg_cfg);
-        ctx->reg_cfg = NULL;
     }
 
     if (ctx->tune) {
@@ -1410,24 +1453,17 @@ MPP_RET hal_h265e_v580_init(void *hal, MppEncHalCfg *cfg)
 {
     MPP_RET ret = MPP_OK;
     H265eV580HalContext *ctx = (H265eV580HalContext *)hal;
-    RK_U32 i = 0;
-    H265eV580RegSet *regs = NULL;
+    RK_S32 i = 0;
 
     mpp_env_get_u32("hal_h265e_debug", &hal_h265e_debug, 0);
 
     hal_h265e_enter();
 
-    for (i = 0; i < MAX_TILE_NUM; i++) {
-        ctx->regs[i]    = mpp_calloc(H265eV580RegSet, 1);
-        ctx->reg_out[i] = mpp_calloc(H265eV580StatusElem, 1);
-    }
-
     ctx->input_fmt     = mpp_calloc(VepuFmtCfg, 1);
     ctx->cfg           = cfg->cfg;
     hal_bufs_init(&ctx->dpb_bufs);
 
-    ctx->frame_cnt = 0;
-    ctx->frame_cnt_gen_ready = 0;
+    ctx->frame_count = 0;
     ctx->enc_mode = RKV_ENC_MODE;
     cfg->type = VPU_CLIENT_RKVENC;
     ret = mpp_dev_init(&cfg->dev, cfg->type);
@@ -1435,32 +1471,52 @@ MPP_RET hal_h265e_v580_init(void *hal, MppEncHalCfg *cfg)
         mpp_err_f("mpp_dev_init failed. ret: %d\n", ret);
         goto DONE;
     }
-    regs = (H265eV580RegSet *)ctx->regs[0];
+
     ctx->dev = cfg->dev;
-    ctx->osd_cfg.reg_base = (void *)&regs->reg_osd_cfg;
-    ctx->osd_cfg.dev = ctx->dev;
-    ctx->osd_cfg.plt_cfg = &ctx->cfg->plt_cfg;
-    ctx->osd_cfg.osd_data = NULL;
-    ctx->osd_cfg.osd_data2 = NULL;
+    ctx->task_cnt = cfg->task_cnt;
+    mpp_assert(ctx->task_cnt && ctx->task_cnt <= MAX_FRAME_TASK_NUM);
 
-    mpp_dev_multi_offset_init(&ctx->reg_cfg, 24);
-    ctx->osd_cfg.reg_cfg = ctx->reg_cfg;
+    if (ctx->task_cnt > MAX_FRAME_TASK_NUM)
+        ctx->task_cnt = MAX_FRAME_TASK_NUM;
 
-    ctx->frame_type = INTRA_FRAME;
+    for (i = 0; i < cfg->task_cnt; i++) {
+        Vepu580H265eFrmCfg *frm_cfg = mpp_calloc(Vepu580H265eFrmCfg, 1);
+
+        frm_cfg->regs_set[0] = mpp_calloc(H265eV580RegSet, 1);
+        frm_cfg->regs_ret[0] = mpp_calloc(H265eV580StatusElem, 1);
+
+        frm_cfg->osd_cfg.reg_base = &frm_cfg->regs_set[0]->reg_osd_cfg;
+
+        /* setup osd cfg */
+        frm_cfg->osd_cfg.dev = ctx->dev;
+        frm_cfg->osd_cfg.plt_cfg = &ctx->cfg->plt_cfg;
+        frm_cfg->osd_cfg.osd_data = NULL;
+        frm_cfg->osd_cfg.osd_data2 = NULL;
+        mpp_dev_multi_offset_init(&frm_cfg->reg_cfg, 24);
+        frm_cfg->osd_cfg.reg_cfg = frm_cfg->reg_cfg;
+
+        frm_cfg->frame_type = INTRA_FRAME;
+
+        ctx->frms[i] = frm_cfg;
+    }
 
     {   /* setup default hardware config */
         MppEncHwCfg *hw = &cfg->cfg->hw;
+        RK_U32 j;
 
         hw->qp_delta_row_i = 2;
         hw->qp_delta_row   = 2;
+        hw->qbias_i = 171;
+        hw->qbias_p = 85;
+        hw->qbias_en = 0;
 
         memcpy(hw->aq_thrd_i, aq_thd_default, sizeof(hw->aq_thrd_i));
         memcpy(hw->aq_thrd_p, aq_thd_default, sizeof(hw->aq_thrd_p));
         memcpy(hw->aq_step_i, aq_qp_dealt_default, sizeof(hw->aq_step_i));
         memcpy(hw->aq_step_p, aq_qp_dealt_default, sizeof(hw->aq_step_p));
 
-        for (i = 0; i < MPP_ARRAY_ELEMS(hw->mode_bias); i++)
-            hw->mode_bias[i] = 8;
+        for (j = 0; j < MPP_ARRAY_ELEMS(hw->mode_bias); j++)
+            hw->mode_bias[j] = 8;
 
         hw->skip_sad  = 8;
         hw->skip_bias = 8;
@@ -1588,10 +1644,149 @@ vepu580_h265_set_patch_info(MppDevRegOffCfgs *cfgs, H265eSyntax_new *syn,
     return ret;
 }
 
+typedef struct refresh_area {
+    RK_S32 roi_ctu_x_sta;
+    RK_S32 roi_ctu_y_sta;
+    RK_S32 roi_ctu_x_end;
+    RK_S32 roi_ctu_y_end;
+} RefreshArea;
+
+static MPP_RET cal_refresh_area(RK_S32 ctu_w, RK_S32 ctu_h, RK_U32 refresh_idx,
+                                MppEncRcRefreshMode refresh_mode, RK_U32 refresh_num, RefreshArea *area)
+{
+    MPP_RET ret = MPP_OK;
+    RK_U32 refresh_ctu_h = 0;
+
+    if (refresh_mode == MPP_ENC_RC_INTRA_REFRESH_ROW) {
+        area->roi_ctu_x_sta = 0;
+        area->roi_ctu_x_end = ctu_w - 1;
+
+        if (refresh_idx > 0) {
+            refresh_ctu_h = refresh_num + 1;
+            area->roi_ctu_y_sta = refresh_num * refresh_idx - 1;
+        } else {
+            refresh_ctu_h = refresh_num;
+            area->roi_ctu_y_sta = 0;
+        }
+
+        area->roi_ctu_y_end = area->roi_ctu_y_sta + refresh_ctu_h - 1;
+    } else {
+        area->roi_ctu_y_sta = 0;
+        area->roi_ctu_y_end = ctu_h - 1;
+
+        if (refresh_idx > 0) {
+            refresh_ctu_h = refresh_num + 1;
+            area->roi_ctu_x_sta = refresh_num * refresh_idx - 1;
+        } else {
+            refresh_ctu_h = refresh_num;
+            area->roi_ctu_x_sta = 0;
+        }
+
+        area->roi_ctu_x_end = area->roi_ctu_x_sta + refresh_ctu_h - 1;
+    }
+
+    area->roi_ctu_x_end = MPP_MIN(area->roi_ctu_x_end, ctu_w - 1);
+    area->roi_ctu_y_end = MPP_MIN(area->roi_ctu_y_end, ctu_h - 1);
+    area->roi_ctu_x_sta = MPP_MAX(area->roi_ctu_x_sta, 0);
+    area->roi_ctu_y_sta = MPP_MAX(area->roi_ctu_y_sta, 0);
+
+    hal_h265e_dbg_detail("size in ctu : %d x %d, refresh_num %d, refresh_idx %d, area x[%d, %d], y[%d, %d]",
+                         ctu_w, ctu_h, refresh_num, refresh_idx,
+                         area->roi_ctu_x_sta, area->roi_ctu_x_end,
+                         area->roi_ctu_y_sta, area->roi_ctu_y_end);
+
+    return ret;
+}
+
+static MPP_RET setup_intra_refresh(H265eV580HalContext *ctx, RK_U32 refresh_idx)
+{
+    Vepu580H265eFrmCfg *frm = ctx->frm;
+    H265eV580RegSet *regs = frm->regs_set[0];
+    RK_U32 w = ctx->cfg->prep.width;
+    RK_U32 h = ctx->cfg->prep.height;
+    RK_S32 ctu_w = MPP_ALIGN(w, 64) / 64;
+    RK_S32 ctu_h = MPP_ALIGN(h, 64) / 64;
+    RK_U32 roi_base_cfg_buf_size = ctu_w * ctu_h * 64;
+    MppEncROICfg2 *external_roi_cfg = (MppEncROICfg2 *)frm->roi_data;
+    RK_U8 *roi_base_cfg_hw_ptr = NULL;
+    RK_U8 *roi_base_cfg_sw_ptr = NULL;
+    RK_S32 roi_base_cfg_buf_fd = 0;
+    RefreshArea cur_area;
+    RK_S32 j, k;
+    MPP_RET ret = MPP_OK;
+
+    hal_h265e_dbg_func("enter\n");
+
+    if (!ctx->cfg->rc.refresh_en) {
+        ret = MPP_ERR_VALUE;
+        goto __RET;
+    }
+
+    if (frm->roi_data) {
+        roi_base_cfg_hw_ptr = mpp_buffer_get_ptr(external_roi_cfg->base_cfg_buf);
+        roi_base_cfg_buf_fd = mpp_buffer_get_fd(external_roi_cfg->base_cfg_buf);
+    } else {
+        if (NULL == frm->roi_base_cfg_buf) {
+            if (NULL == ctx->roi_grp)
+                mpp_buffer_group_get_internal(&ctx->roi_grp, MPP_BUFFER_TYPE_ION);
+            mpp_buffer_get(ctx->roi_grp, &frm->roi_base_cfg_buf, roi_base_cfg_buf_size);
+        }
+        roi_base_cfg_hw_ptr = mpp_buffer_get_ptr(frm->roi_base_cfg_buf);
+        roi_base_cfg_buf_fd = mpp_buffer_get_fd(frm->roi_base_cfg_buf);
+    }
+
+    frm->roi_base_buf_size = roi_base_cfg_buf_size;
+
+    if (NULL == frm->roi_base_cfg_sw_buf) {
+        frm->roi_base_cfg_sw_buf = mpp_malloc(RK_U8, roi_base_cfg_buf_size);
+    }
+    roi_base_cfg_sw_ptr = frm->roi_base_cfg_sw_buf;
+
+    memset(frm->roi_base_cfg_sw_buf, 0, roi_base_cfg_buf_size);
+
+    if (MPP_OK != cal_refresh_area(ctu_w, ctu_h, refresh_idx, ctx->cfg->rc.refresh_mode, ctx->cfg->rc.refresh_num, &cur_area)) {
+        ret = MPP_ERR_VALUE;
+        mpp_err_f("setting refresh area out of range");
+        goto __RET;
+    }
+
+    RK_U8 *ptr = roi_base_cfg_sw_ptr;
+    for (j = 0; j < ctu_h; j++) {
+        for (k = 0; k < ctu_w; k++) {
+            if (j <= cur_area.roi_ctu_y_end && j >= cur_area.roi_ctu_y_sta &&
+                k <= cur_area.roi_ctu_x_end && k >= cur_area.roi_ctu_x_sta) {
+
+                memset(ptr + 22, 0x55, 20); //176~336
+                *(ptr + 21) = 0x54; //170~175
+                *(ptr + 42) = 0x05; //336~339
+            }
+            ptr += 64;
+        }
+    }
+
+    memcpy(roi_base_cfg_hw_ptr, roi_base_cfg_sw_ptr, roi_base_cfg_buf_size);
+
+    if (ctx->cfg->rc.refresh_mode == MPP_ENC_RC_INTRA_REFRESH_ROW)
+        regs->reg_base.reg0220_me_rnge.cme_srch_v = 1;
+    else if (ctx->cfg->rc.refresh_mode == MPP_ENC_RC_INTRA_REFRESH_COL)
+        regs->reg_base.reg0220_me_rnge.cme_srch_h = 1;
+
+    regs->reg_base.reg0192_enc_pic.roi_en = 1;
+    regs->reg_base.reg0178_roi_addr = roi_base_cfg_buf_fd;
+    mpp_buffer_sync_end(frm->roi_base_cfg_buf);
+
+__RET:
+    hal_h265e_dbg_func("leave, ret %d\n", ret);
+    return ret;
+}
+
+
 static MPP_RET vepu580_h265_set_roi_regs(H265eV580HalContext *ctx, hevc_vepu580_base *regs)
 {
+    Vepu580H265eFrmCfg *frm = ctx->frm;
+
     /* memset register on start so do not clear registers again here */
-    if (ctx->roi_data) {
+    if (frm->roi_data) {
         /* roi setup */
         RK_U32 ctu_w = MPP_ALIGN(ctx->cfg->prep.width, 64) / 64;
         RK_U32 ctu_h  = MPP_ALIGN(ctx->cfg->prep.height, 64) / 64;
@@ -1599,7 +1794,7 @@ static MPP_RET vepu580_h265_set_roi_regs(H265eV580HalContext *ctx, hevc_vepu580_
         RK_U32 qp_cfg_size   = ctu_w * ctu_h * 256;
         RK_U32 amv_cfg_size  = ctu_w * ctu_h * 512;
         RK_U32 mv_cfg_size   = ctu_w * ctu_h * 4;
-        MppEncROICfg2 *cfg   = (MppEncROICfg2 *)ctx->roi_data;
+        MppEncROICfg2 *cfg   = (MppEncROICfg2 *)frm->roi_data;
 
         if (mpp_buffer_get_size(cfg->base_cfg_buf) >= base_cfg_size) {
             regs->reg0192_enc_pic.roi_en = 1;
@@ -1641,7 +1836,7 @@ static MPP_RET vepu580_h265_set_roi_regs(H265eV580HalContext *ctx, hevc_vepu580_
 
 static MPP_RET vepu580_h265_set_rc_regs(H265eV580HalContext *ctx, H265eV580RegSet *regs, HalEncTask *task)
 {
-    H265eSyntax_new *syn = (H265eSyntax_new *)task->syntax.data;
+    H265eSyntax_new *syn = ctx->syn;
     EncRcTaskInfo *rc_cfg = &task->rc_task->info;
     hevc_vepu580_base *reg_base = &regs->reg_base;
     hevc_vepu580_rc_klut *reg_rc = &regs->reg_rc_klut;
@@ -1708,17 +1903,17 @@ static MPP_RET vepu580_h265_set_rc_regs(H265eV580HalContext *ctx, H265eV580RegSe
         reg_rc->roi_qthd0.qpmax_area0 = h265->qpmax_map[0] > 0 ? h265->qpmax_map[0] : rc_cfg->quality_max;
         reg_rc->roi_qthd0.qpmin_area1 = h265->qpmin_map[1] > 0 ? h265->qpmin_map[1] : rc_cfg->quality_min;
         reg_rc->roi_qthd0.qpmax_area1 = h265->qpmax_map[1] > 0 ? h265->qpmax_map[1] : rc_cfg->quality_max;
-        reg_rc->roi_qthd0.qpmin_area2 = h265->qpmin_map[2] > 0 ? h265->qpmin_map[2] : rc_cfg->quality_min;;
+        reg_rc->roi_qthd0.qpmin_area2 = h265->qpmin_map[2] > 0 ? h265->qpmin_map[2] : rc_cfg->quality_min;
         reg_rc->roi_qthd1.qpmax_area2 = h265->qpmax_map[2] > 0 ? h265->qpmax_map[2] : rc_cfg->quality_max;
-        reg_rc->roi_qthd1.qpmin_area3 = h265->qpmin_map[3] > 0 ? h265->qpmin_map[3] : rc_cfg->quality_min;;
+        reg_rc->roi_qthd1.qpmin_area3 = h265->qpmin_map[3] > 0 ? h265->qpmin_map[3] : rc_cfg->quality_min;
         reg_rc->roi_qthd1.qpmax_area3 = h265->qpmax_map[3] > 0 ? h265->qpmax_map[3] : rc_cfg->quality_max;
-        reg_rc->roi_qthd1.qpmin_area4 = h265->qpmin_map[4] > 0 ? h265->qpmin_map[4] : rc_cfg->quality_min;;
+        reg_rc->roi_qthd1.qpmin_area4 = h265->qpmin_map[4] > 0 ? h265->qpmin_map[4] : rc_cfg->quality_min;
         reg_rc->roi_qthd1.qpmax_area4 = h265->qpmax_map[4] > 0 ? h265->qpmax_map[4] : rc_cfg->quality_max;
-        reg_rc->roi_qthd2.qpmin_area5 = h265->qpmin_map[5] > 0 ? h265->qpmin_map[5] : rc_cfg->quality_min;;
+        reg_rc->roi_qthd2.qpmin_area5 = h265->qpmin_map[5] > 0 ? h265->qpmin_map[5] : rc_cfg->quality_min;
         reg_rc->roi_qthd2.qpmax_area5 = h265->qpmax_map[5] > 0 ? h265->qpmax_map[5] : rc_cfg->quality_max;
-        reg_rc->roi_qthd2.qpmin_area6 = h265->qpmin_map[6] > 0 ? h265->qpmin_map[6] : rc_cfg->quality_min;;
+        reg_rc->roi_qthd2.qpmin_area6 = h265->qpmin_map[6] > 0 ? h265->qpmin_map[6] : rc_cfg->quality_min;
         reg_rc->roi_qthd2.qpmax_area6 = h265->qpmax_map[6] > 0 ? h265->qpmax_map[6] : rc_cfg->quality_max;
-        reg_rc->roi_qthd2.qpmin_area7 = h265->qpmin_map[7] > 0 ? h265->qpmin_map[7] : rc_cfg->quality_min;;
+        reg_rc->roi_qthd2.qpmin_area7 = h265->qpmin_map[7] > 0 ? h265->qpmin_map[7] : rc_cfg->quality_min;
         reg_rc->roi_qthd3.qpmax_area7 = h265->qpmax_map[7] > 0 ? h265->qpmax_map[7] : rc_cfg->quality_max;
         reg_rc->roi_qthd3.qpmap_mode  = h265->qpmap_mode;
     }
@@ -1854,7 +2049,7 @@ static void vepu580_h265_set_slice_regs(H265eSyntax_new *syn, hevc_vepu580_base 
     regs->reg0239_synt_sli0.no_out_pri_pic      = syn->sp.no_out_pri_pic;
 
 
-    regs->reg0240_synt_sli1.sp_tc_ofst_div2       = syn->sp.sli_tc_ofst_div2;;
+    regs->reg0240_synt_sli1.sp_tc_ofst_div2       = syn->sp.sli_tc_ofst_div2;
     regs->reg0240_synt_sli1.sp_beta_ofst_div2     = syn->sp.sli_beta_ofst_div2;
     regs->reg0240_synt_sli1.sli_lp_fltr_acrs_sli  = syn->sp.sli_lp_fltr_acrs_sli;
     regs->reg0240_synt_sli1.sp_dblk_fltr_dis      = syn->sp.sli_dblk_fltr_dis;
@@ -2028,6 +2223,33 @@ FAILE:
     return ret;
 }
 
+static MPP_RET setup_vepu580_dual_core(H265eV580HalContext *ctx)
+{
+    Vepu580H265eFrmCfg *frm = ctx->frm;
+    H265eV580RegSet *regs = frm->regs_set[0];
+    hevc_vepu580_base *reg_base = &regs->reg_base;
+    RK_U32 dchs_ofst = 9;
+    RK_U32 dchs_rxe  = 1;
+
+    if (frm->frame_type == INTRA_FRAME) {
+        ctx->curr_idx = 0;
+        ctx->prev_idx = 0;
+        dchs_rxe = 0;
+    }
+
+    reg_base->reg0193_dual_core.dchs_txid = ctx->curr_idx;
+    reg_base->reg0193_dual_core.dchs_rxid = ctx->prev_idx;
+    reg_base->reg0193_dual_core.dchs_txe = 1;
+    reg_base->reg0193_dual_core.dchs_rxe = dchs_rxe;
+    reg_base->reg0193_dual_core.dchs_ofst = dchs_ofst;
+
+    ctx->prev_idx = ctx->curr_idx++;
+    if (ctx->curr_idx > 3)
+        ctx->curr_idx = 0;
+
+    return MPP_OK;
+}
+
 static void vepu580_h265_set_me_regs(H265eV580HalContext *ctx, H265eSyntax_new *syn, hevc_vepu580_base *regs)
 {
 
@@ -2130,12 +2352,14 @@ static void vepu580_h265_set_me_regs(H265eV580HalContext *ctx, H265eSyntax_new *
 
 }
 
-void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, hevc_vepu580_base *regs, HalEncTask *task)
+void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, HalEncTask *task)
 {
+    Vepu580H265eFrmCfg *frm = ctx->frm;
+    hevc_vepu580_base *regs = &frm->regs_set[0]->reg_base;
     HalEncTask *enc_task = task;
     HalBuf *recon_buf, *ref_buf;
     MppBuffer md_info_buf = enc_task->md_info;
-    H265eSyntax_new *syn = (H265eSyntax_new *)enc_task->syntax.data;
+    H265eSyntax_new *syn = ctx->syn;
 
     hal_h265e_enter();
 
@@ -2143,14 +2367,14 @@ void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, hevc_vepu580_base *re
     regs->reg0161_adr_src1     = regs->reg0160_adr_src0;
     regs->reg0162_adr_src2     = regs->reg0160_adr_src0;
 
-    recon_buf = hal_bufs_get_buf(ctx->dpb_bufs, syn->sp.recon_pic.slot_idx);
-    ref_buf = hal_bufs_get_buf(ctx->dpb_bufs, syn->sp.ref_pic.slot_idx);
+    recon_buf = hal_bufs_get_buf(ctx->dpb_bufs, frm->hal_curr_idx);
+    ref_buf = hal_bufs_get_buf(ctx->dpb_bufs, frm->hal_refr_idx);
 
     if (!syn->sp.non_reference_flag) {
         regs->reg0163_rfpw_h_addr  = mpp_buffer_get_fd(recon_buf->buf[0]);
         regs->reg0164_rfpw_b_addr  = regs->reg0163_rfpw_h_addr;
 
-        mpp_dev_multi_offset_update(ctx->reg_cfg, 164, ctx->fbc_header_len);
+        mpp_dev_multi_offset_update(frm->reg_cfg, 164, ctx->fbc_header_len);
     }
     regs->reg0165_rfpr_h_addr = mpp_buffer_get_fd(ref_buf->buf[0]);
     regs->reg0166_rfpr_b_addr = regs->reg0165_rfpr_h_addr;
@@ -2159,11 +2383,12 @@ void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, hevc_vepu580_base *re
     regs->reg0169_dspw_addr = mpp_buffer_get_fd(recon_buf->buf[1]);
     regs->reg0170_dspr_addr = mpp_buffer_get_fd(ref_buf->buf[1]);
 
-    mpp_dev_multi_offset_update(ctx->reg_cfg, 166, ctx->fbc_header_len);
+    mpp_dev_multi_offset_update(frm->reg_cfg, 166, ctx->fbc_header_len);
 
     if (syn->pp.tiles_enabled_flag) {
         RK_U32 tile_num = (syn->pp.num_tile_columns_minus1 + 1) * (syn->pp.num_tile_rows_minus1 + 1);
         RK_U32 i = 0;
+        RK_U32 max_tile_buf_size = MPP_ALIGN(((MPP_ALIGN(syn->pp.pic_height, 64) + 64) << 5), 256);
 
         if (NULL == ctx->tile_grp)
             mpp_buffer_group_get_internal(&ctx->tile_grp, MPP_BUFFER_TYPE_ION);
@@ -2171,26 +2396,26 @@ void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, hevc_vepu580_base *re
         mpp_assert(ctx->tile_grp);
 
         for (i = 0; i < MAX_TILE_NUM; i++) {
-            if (NULL == ctx->hw_tile_buf[i]) {
-                mpp_buffer_get(ctx->tile_grp, &ctx->hw_tile_buf[i], TILE_BUF_SIZE);
+            if (NULL == frm->hw_tile_buf[i]) {
+                mpp_buffer_get(ctx->tile_grp, &frm->hw_tile_buf[i], max_tile_buf_size);
             }
         }
 
-        if (NULL == ctx->hw_tile_stream[0]) {
-            mpp_buffer_get(ctx->tile_grp, &ctx->hw_tile_stream[0], ctx->frame_size / tile_num);
+        if (NULL == frm->hw_tile_stream[0]) {
+            mpp_buffer_get(ctx->tile_grp, &frm->hw_tile_stream[0], ctx->frame_size / tile_num);
         }
 
         if (tile_num > 2) {
-            if (NULL == ctx->hw_tile_stream[1]) {
-                mpp_buffer_get(ctx->tile_grp, &ctx->hw_tile_stream[1], ctx->frame_size / tile_num);
+            if (NULL == frm->hw_tile_stream[1]) {
+                mpp_buffer_get(ctx->tile_grp, &frm->hw_tile_stream[1], ctx->frame_size / tile_num);
             }
-            if (NULL == ctx->hw_tile_stream[2]) {
-                mpp_buffer_get(ctx->tile_grp, &ctx->hw_tile_stream[2], ctx->frame_size / tile_num);
+            if (NULL == frm->hw_tile_stream[2]) {
+                mpp_buffer_get(ctx->tile_grp, &frm->hw_tile_stream[2], ctx->frame_size / tile_num);
             }
         }
 
-        regs->reg0176_lpfw_addr  = mpp_buffer_get_fd(ctx->hw_tile_buf[0]);
-        regs->reg0177_lpfr_addr  = mpp_buffer_get_fd(ctx->hw_tile_buf[1]);
+        regs->reg0176_lpfw_addr  = mpp_buffer_get_fd(frm->hw_tile_buf[0]);
+        regs->reg0177_lpfr_addr  = mpp_buffer_get_fd(frm->hw_tile_buf[1]);
     }
 
     if (md_info_buf) {
@@ -2207,8 +2432,8 @@ void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, hevc_vepu580_base *re
     regs->reg0174_bsbr_addr = regs->reg0172_bsbt_addr;
     regs->reg0175_adr_bsbs  = regs->reg0172_bsbt_addr;
 
-    mpp_dev_multi_offset_update(ctx->reg_cfg, 175, mpp_packet_get_length(task->packet));
-    mpp_dev_multi_offset_update(ctx->reg_cfg, 172, mpp_buffer_get_size(enc_task->output));
+    mpp_dev_multi_offset_update(frm->reg_cfg, 175, mpp_packet_get_length(task->packet));
+    mpp_dev_multi_offset_update(frm->reg_cfg, 172, mpp_buffer_get_size(enc_task->output));
 
     regs->reg0204_pic_ofst.pic_ofst_y = mpp_frame_get_offset_y(task->frame);
     regs->reg0204_pic_ofst.pic_ofst_x = mpp_frame_get_offset_x(task->frame);
@@ -2217,6 +2442,7 @@ void vepu580_h265_set_hw_address(H265eV580HalContext *ctx, hevc_vepu580_base *re
 static MPP_RET vepu580_h265e_save_pass1_patch(H265eV580RegSet *regs, H265eV580HalContext *ctx,
                                               RK_S32 tiles_enabled_flag)
 {
+    Vepu580H265eFrmCfg *frm = ctx->frm;
     hevc_vepu580_base *reg_base = &regs->reg_base;
     RK_S32 width = ctx->cfg->prep.width;
     RK_S32 height = ctx->cfg->prep.height;
@@ -2239,7 +2465,7 @@ static MPP_RET vepu580_h265e_save_pass1_patch(H265eV580RegSet *regs, H265eV580Ha
     if (tiles_enabled_flag)
         reg_base->reg0238_synt_pps.lpf_fltr_acrs_til = 0;
 
-    mpp_dev_multi_offset_update(ctx->reg_cfg, 164, width_align * height);
+    mpp_dev_multi_offset_update(frm->reg_cfg, 164, width_align * height);
 
     /* NOTE: disable split to avoid lowdelay slice output */
     regs->reg_base.reg0216_sli_splt.sli_splt = 0;
@@ -2250,6 +2476,7 @@ static MPP_RET vepu580_h265e_save_pass1_patch(H265eV580RegSet *regs, H265eV580Ha
 
 static MPP_RET vepu580_h265e_use_pass1_patch(H265eV580RegSet *regs, H265eV580HalContext *ctx)
 {
+    Vepu580H265eFrmCfg *frm = ctx->frm;
     hevc_vepu580_control_cfg *reg_ctl = &regs->reg_ctl;
     hevc_vepu580_base *reg_base = &regs->reg_base;
     RK_U32 hor_stride = MPP_ALIGN(ctx->cfg->prep.width, 64);
@@ -2269,12 +2496,12 @@ static MPP_RET vepu580_h265e_use_pass1_patch(H265eV580RegSet *regs, H265eV580Hal
     reg_base->reg0162_adr_src2 = reg_base->reg0160_adr_src0;
 
     /* input cb addr */
-    ret = mpp_dev_multi_offset_update(ctx->reg_cfg, 161, frame_size);
+    ret = mpp_dev_multi_offset_update(frm->reg_cfg, 161, frame_size);
     if (ret)
         mpp_err_f("set input cb addr offset failed %d\n", ret);
 
     /* input cr addr */
-    ret = mpp_dev_multi_offset_update(ctx->reg_cfg, 162, frame_size);
+    ret = mpp_dev_multi_offset_update(frm->reg_cfg, 162, frame_size);
     if (ret)
         mpp_err_f("set input cr addr offset failed %d\n", ret);
 
@@ -2350,8 +2577,9 @@ MPP_RET hal_h265e_v580_gen_regs(void *hal, HalEncTask *task)
     HalEncTask *enc_task = task;
     EncRcTask *rc_task = enc_task->rc_task;
     EncFrmStatus *frm = &rc_task->frm;
-    H265eSyntax_new *syn = (H265eSyntax_new *)enc_task->syntax.data;
-    H265eV580RegSet *regs = (H265eV580RegSet *)ctx->regs[0];
+    H265eSyntax_new *syn = ctx->syn;
+    Vepu580H265eFrmCfg *frm_cfg = ctx->frm;
+    H265eV580RegSet *regs = frm_cfg->regs_set[0];
     RK_U32 pic_width_align8, pic_height_align8;
     RK_S32 pic_wd64, pic_h64;
     VepuFmtCfg *fmt = (VepuFmtCfg *)ctx->input_fmt;
@@ -2366,9 +2594,12 @@ MPP_RET hal_h265e_v580_gen_regs(void *hal, HalEncTask *task)
     pic_h64 = (syn->pp.pic_height + 63) / 64;
 
     hal_h265e_dbg_simple("frame %d | type %d | start gen regs",
-                         ctx->frame_cnt, ctx->frame_type);
+                         frm_cfg->frame_count, ctx->frame_type);
 
     memset(regs, 0, sizeof(H265eV580RegSet));
+
+    if (ctx->task_cnt > 1)
+        setup_vepu580_dual_core(ctx);
 
     reg_ctl->reg0004_enc_strt.lkt_num      = 0;
     reg_ctl->reg0004_enc_strt.vepu_cmd     = ctx->enc_mode;
@@ -2402,7 +2633,7 @@ MPP_RET hal_h265e_v580_gen_regs(void *hal, HalEncTask *task)
     reg_ctl->reg0013_dtrns_cfg.dspr_otsd        = (ctx->frame_type == INTER_P_FRAME);
     reg_ctl->reg0013_dtrns_cfg.axi_brsp_cke     = 0x0;
     reg_ctl->reg0014_enc_wdg.vs_load_thd        = 0x1fffff;
-    reg_ctl->reg0014_enc_wdg.rfp_load_thd       = 0xff;
+    reg_ctl->reg0014_enc_wdg.rfp_load_thd       = 0;
 
     reg_ctl->reg0021_func_en.cke                = 1;
     reg_ctl->reg0021_func_en.resetn_hw_en       = 1;
@@ -2459,15 +2690,17 @@ MPP_RET hal_h265e_v580_gen_regs(void *hal, HalEncTask *task)
         reg_base->reg0236_synt_nal.nal_unit_type    = i_nal_type;
     }
 
-    vepu580_h265_set_hw_address(ctx, reg_base, task);
+    vepu580_h265_set_hw_address(ctx, task);
     vepu580_h265_set_pp_regs(regs, fmt, &ctx->cfg->prep, task);
     vepu580_h265_set_rc_regs(ctx, regs, task);
     vepu580_h265_set_slice_regs(syn, reg_base);
     vepu580_h265_set_ref_regs(syn, reg_base);
 
-    vepu580_set_osd(&ctx->osd_cfg);
+    vepu580_set_osd(&ctx->frm->osd_cfg);
     /* ROI configure */
     vepu580_h265_set_roi_regs(ctx, reg_base);
+    if (frm->is_i_refresh)
+        setup_intra_refresh(ctx, frm->seq_idx % ctx->cfg->rc.gop);
 
     /*paramet cfg*/
     vepu580_h265_global_cfg_set(ctx, regs);
@@ -2481,8 +2714,6 @@ MPP_RET hal_h265e_v580_gen_regs(void *hal, HalEncTask *task)
     if (frm->use_pass1)
         vepu580_h265e_use_pass1_patch(regs, ctx);
 
-    ctx->frame_num++;
-
     hal_h265e_leave();
     return MPP_OK;
 }
@@ -2495,7 +2726,16 @@ void hal_h265e_v580_set_uniform_tile(hevc_vepu580_base *regs, H265eSyntax_new *s
         RK_S32 tile_width = (index + 1) * mb_w / (syn->pp.num_tile_columns_minus1 + 1) -
                             index * mb_w / (syn->pp.num_tile_columns_minus1 + 1);
 
-        if (index > 0) {
+        if (!regs->reg0192_enc_pic.cur_frm_ref &&
+            !(regs->reg0238_synt_pps.lpf_fltr_acrs_til &&
+              regs->reg0238_synt_pps.lp_fltr_acrs_sli &&
+              regs->reg0240_synt_sli1.sli_lp_fltr_acrs_sli &&
+              regs->reg0237_synt_sps.smpl_adpt_ofst_e &&
+              (regs->reg0239_synt_sli0.sli_sao_luma_flg ||
+               (regs->reg0239_synt_sli0.sli_sao_chrm_flg && regs->reg0198_src_fmt.out_fmt)))) {
+            regs->reg0193_dual_core.dchs_txe = 0;
+            regs->reg0193_dual_core.dchs_rxe = 0;
+        } else if (index > 0) {
             regs->reg0193_dual_core.dchs_txid = index;
             regs->reg0193_dual_core.dchs_rxid = index - 1;
             regs->reg0193_dual_core.dchs_txe = 1;
@@ -2529,14 +2769,16 @@ void hal_h265e_v580_set_uniform_tile(hevc_vepu580_base *regs, H265eSyntax_new *s
 
 MPP_RET hal_h265e_v580_start(void *hal, HalEncTask *enc_task)
 {
-    MPP_RET ret = MPP_OK;
     H265eV580HalContext *ctx = (H265eV580HalContext *)hal;
-    RK_U32 k = 0;
-    H265eSyntax_new *syn = (H265eSyntax_new *)enc_task->syntax.data;
+    H265eSyntax_new *syn = ctx->syn;
     RK_U32 tile_num = (syn->pp.num_tile_columns_minus1 + 1) * (syn->pp.num_tile_rows_minus1 + 1);
-    hal_h265e_enter();
     RK_U32 stream_len = 0;
     VepuFmtCfg *fmt = (VepuFmtCfg *)ctx->input_fmt;
+    Vepu580H265eFrmCfg *frm = ctx->frm;
+    RK_U32 k = 0;
+    MPP_RET ret = MPP_OK;
+
+    hal_h265e_enter();
 
     ctx->tile_num = tile_num;
 
@@ -2552,25 +2794,36 @@ MPP_RET hal_h265e_v580_start(void *hal, HalEncTask *enc_task)
     }
 
     for (k = 0; k < tile_num; k++) {
-        H265eV580RegSet *hw_regs = (H265eV580RegSet *)ctx->regs[k];
-        hevc_vepu580_base *reg_base = &hw_regs->reg_base;
-        H265eV580StatusElem *reg_out = (H265eV580StatusElem *)ctx->reg_out[k];
+        H265eV580RegSet *hw_regs = frm->regs_set[k];
+        hevc_vepu580_base *reg_base = NULL;
+        H265eV580StatusElem *reg_out = frm->regs_ret[k];
+
+        if (!hw_regs) {
+            hw_regs = mpp_malloc(H265eV580RegSet, 1);
+            frm->regs_set[k] = hw_regs;
+        }
+        if (!reg_out) {
+            reg_out = mpp_malloc(H265eV580StatusElem, 1);
+            frm->regs_ret[k] = reg_out;
+        }
+
+        reg_base = &hw_regs->reg_base;
 
         if (k)
-            memcpy(hw_regs, ctx->regs[0], sizeof(*hw_regs));
+            memcpy(hw_regs, frm->regs_set[0], sizeof(*hw_regs));
 
-        vepu580_h265_set_me_ram(syn, &hw_regs->reg_base, k);
+        vepu580_h265_set_me_ram(syn, reg_base, k);
 
         /* set input info */
-        vepu580_h265_set_patch_info(ctx->reg_cfg, syn, (Vepu541Fmt)fmt->format, enc_task);
+        vepu580_h265_set_patch_info(frm->reg_cfg, syn, (Vepu541Fmt)fmt->format, enc_task);
         if (tile_num > 1)
-            hal_h265e_v580_set_uniform_tile(&hw_regs->reg_base, syn, k);
+            hal_h265e_v580_set_uniform_tile(reg_base, syn, k);
 
         if (k) {
             RK_U32 offset = 0;
 
-            reg_base->reg0176_lpfw_addr  = mpp_buffer_get_fd(ctx->hw_tile_buf[k]);
-            reg_base->reg0177_lpfr_addr  = mpp_buffer_get_fd(ctx->hw_tile_buf[k - 1]);
+            reg_base->reg0176_lpfw_addr  = mpp_buffer_get_fd(frm->hw_tile_buf[k]);
+            reg_base->reg0177_lpfr_addr  = mpp_buffer_get_fd(frm->hw_tile_buf[k - 1]);
 
             if (!ctx->tile_parall_en) {
                 offset = mpp_packet_get_length(enc_task->packet);
@@ -2578,23 +2831,23 @@ MPP_RET hal_h265e_v580_start(void *hal, HalEncTask *enc_task)
 
                 reg_base->reg0173_bsbb_addr = mpp_buffer_get_fd(enc_task->output);
 
-                mpp_dev_multi_offset_update(ctx->reg_cfg, 175, offset);
-                mpp_dev_multi_offset_update(ctx->reg_cfg, 172, mpp_buffer_get_size(enc_task->output));
+                mpp_dev_multi_offset_update(frm->reg_cfg, 175, offset);
+                mpp_dev_multi_offset_update(frm->reg_cfg, 172, mpp_buffer_get_size(enc_task->output));
             } else {
-                reg_base->reg0172_bsbt_addr = mpp_buffer_get_fd(ctx->hw_tile_stream[k - 1]);
+                reg_base->reg0172_bsbt_addr = mpp_buffer_get_fd(frm->hw_tile_stream[k - 1]);
                 /* TODO: stream size relative with syntax */
                 reg_base->reg0173_bsbb_addr = reg_base->reg0172_bsbt_addr;
                 reg_base->reg0174_bsbr_addr = reg_base->reg0172_bsbt_addr;
                 reg_base->reg0175_adr_bsbs  = reg_base->reg0172_bsbt_addr;
 
-                mpp_dev_multi_offset_update(ctx->reg_cfg, 175, 0);
-                mpp_dev_multi_offset_update(ctx->reg_cfg, 172, mpp_buffer_get_size(ctx->hw_tile_stream[k - 1]));
+                mpp_dev_multi_offset_update(frm->reg_cfg, 175, 0);
+                mpp_dev_multi_offset_update(frm->reg_cfg, 172, mpp_buffer_get_size(frm->hw_tile_stream[k - 1]));
             }
 
             offset = ctx->fbc_header_len;
 
-            mpp_dev_multi_offset_update(ctx->reg_cfg, 166, offset);
-            mpp_dev_multi_offset_update(ctx->reg_cfg, 164, offset);
+            mpp_dev_multi_offset_update(frm->reg_cfg, 166, offset);
+            mpp_dev_multi_offset_update(frm->reg_cfg, 164, offset);
 
             if (enc_task->rc_task->frm.save_pass1)
                 vepu580_h265e_save_pass1_patch(hw_regs, ctx, syn->pp.tiles_enabled_flag);
@@ -2604,11 +2857,11 @@ MPP_RET hal_h265e_v580_start(void *hal, HalEncTask *enc_task)
         }
         hal_h265e_v580_send_regs(ctx->dev, hw_regs, reg_out);
 
-        mpp_dev_ioctl(ctx->dev, MPP_DEV_REG_OFFS, ctx->reg_cfg);
+        mpp_dev_ioctl(ctx->dev, MPP_DEV_REG_OFFS, frm->reg_cfg);
 
         if (k < tile_num - 1) {
             if (!ctx->tile_parall_en) {
-                vepu580_h265_fbk *fb = &ctx->feedback;
+                Vepu580H265Fbk *fb = &frm->feedback;
 
                 ret = mpp_dev_ioctl(ctx->dev, MPP_DEV_CMD_SEND, NULL);
                 if (ret) {
@@ -2645,14 +2898,15 @@ MPP_RET hal_h265e_v580_start(void *hal, HalEncTask *enc_task)
 static MPP_RET vepu580_h265_set_feedback(H265eV580HalContext *ctx, HalEncTask *enc_task, RK_U32 index)
 {
     EncRcTaskInfo *hal_rc_ret = (EncRcTaskInfo *)&enc_task->rc_task->info;
-    vepu580_h265_fbk *fb = &ctx->feedback;
-    MppEncCfgSet    *cfg = ctx->cfg;
+    Vepu580H265eFrmCfg *frm = ctx->frms[enc_task->flags.reg_idx];
+    Vepu580H265Fbk *fb = &frm->feedback;
+    MppEncCfgSet *cfg = ctx->cfg;
     RK_S32 mb64_num = ((cfg->prep.width + 63) / 64) * ((cfg->prep.height + 63) / 64);
     RK_S32 mb8_num = (mb64_num << 6);
     RK_S32 mb4_num = (mb8_num << 2);
 
     hal_h265e_enter();
-    H265eV580StatusElem *elem = (H265eV580StatusElem *)ctx->reg_out[index];
+    H265eV580StatusElem *elem = frm->regs_ret[index];
     RK_U32 hw_status = elem->hw_status;
 
     fb->qp_sum += elem->st.qp_sum;
@@ -2754,13 +3008,13 @@ void save_to_file(char *name, void *ptr, size_t size)
 
 void dump_files(H265eV580HalContext *ctx, HalEncTask *enc_task)
 {
-    H265eSyntax_new *syn = (H265eSyntax_new *)enc_task->syntax.data;
+    H265eSyntax_new *syn = ctx->syn;
     HalBuf *hal_buf = hal_bufs_get_buf(ctx->dpb_bufs, syn->sp.ref_pic.slot_idx);
     size_t buf_size = mpp_buffer_get_size(hal_buf->buf[0]);
     size_t dws_size = mpp_buffer_get_size(hal_buf->buf[1]);
     void *ptr = mpp_buffer_get_ptr(hal_buf->buf[0]);
     void *dws_ptr = mpp_buffer_get_ptr(hal_buf->buf[1]);
-    RK_U32 frm_num = ctx->frame_num;
+    RK_U32 frm_num = ctx->frms[enc_task->flags.reg_idx]->frame_count;
     RK_S32 pid = getpid();
     char name[128];
     size_t name_len = sizeof(name) - 1;
@@ -2790,12 +3044,58 @@ void dump_files(H265eV580HalContext *ctx, HalEncTask *enc_task)
     save_to_file(name, dws_ptr, dws_size);
 }
 
+static MPP_RET hal_h265e_vepu580_status_check(RK_U32 hw_status)
+{
+    MPP_RET ret = MPP_OK;
+
+    if (hw_status & RKV_ENC_INT_LINKTABLE_FINISH)
+        hal_h265e_dbg_detail("RKV_ENC_INT_LINKTABLE_FINISH");
+
+    if (hw_status & RKV_ENC_INT_ONE_FRAME_FINISH)
+        hal_h265e_dbg_detail("RKV_ENC_INT_ONE_FRAME_FINISH");
+
+    if (hw_status & RKV_ENC_INT_ONE_SLICE_FINISH)
+        hal_h265e_dbg_detail("RKV_ENC_INT_ONE_SLICE_FINISH");
+
+    if (hw_status & RKV_ENC_INT_SAFE_CLEAR_FINISH)
+        hal_h265e_dbg_detail("RKV_ENC_INT_SAFE_CLEAR_FINISH");
+
+    if (hw_status & RKV_ENC_INT_BIT_STREAM_OVERFLOW) {
+        hal_h265e_err("RKV_ENC_INT_BIT_STREAM_OVERFLOW");
+        ret = MPP_NOK;
+    }
+
+    if (hw_status & RKV_ENC_INT_BUS_WRITE_FULL) {
+        hal_h265e_err("RKV_ENC_INT_BUS_WRITE_FULL");
+        ret = MPP_NOK;
+    }
+
+    if (hw_status & RKV_ENC_INT_BUS_WRITE_ERROR) {
+        hal_h265e_err("RKV_ENC_INT_BUS_WRITE_ERROR");
+        ret = MPP_NOK;
+    }
+
+    if (hw_status & RKV_ENC_INT_BUS_READ_ERROR) {
+        hal_h265e_err("RKV_ENC_INT_BUS_READ_ERROR");
+        ret = MPP_NOK;
+    }
+
+    if (hw_status & RKV_ENC_INT_TIMEOUT_ERROR) {
+        hal_h265e_err("RKV_ENC_INT_TIMEOUT_ERROR");
+        ret = MPP_NOK;
+    }
+
+    return ret;
+}
+
 MPP_RET hal_h265e_v580_wait(void *hal, HalEncTask *task)
 {
     MPP_RET ret = MPP_OK;
     H265eV580HalContext *ctx = (H265eV580HalContext *)hal;
     HalEncTask *enc_task = task;
     RK_U32 split_out = ctx->cfg->split.split_out;
+    RK_S32 task_idx = task->flags.reg_idx;
+    Vepu580H265eFrmCfg *frm = ctx->frms[task_idx];
 
     hal_h265e_enter();
 
@@ -2815,7 +3115,7 @@ MPP_RET hal_h265e_v580_wait(void *hal, HalEncTask *task)
         RK_U32 offset = mpp_packet_get_length(pkt);
         RK_U32 seg_offset = offset;
         void* ptr = mpp_packet_get_pos(pkt);
-        H265eV580RegSet *regs = (H265eV580RegSet *)ctx->regs[0];
+        H265eV580RegSet *regs = frm->regs_set[0];
         hevc_vepu580_base *reg_base = &regs->reg_base;
         RK_U32 type = reg_base->reg0236_synt_nal.nal_unit_type;
         MppDevPollCfg *poll_cfg = (MppDevPollCfg *)((char *)ctx->poll_cfgs);
@@ -2838,8 +3138,10 @@ MPP_RET hal_h265e_v580_wait(void *hal, HalEncTask *task)
                 param.length = slice_len;
 
                 if (finish_cnt > 0) {
-                    void *tile1_ptr  = mpp_buffer_get_ptr(ctx->hw_tile_stream[finish_cnt - 1]);
+                    MppBuffer buf = frm->hw_tile_stream[finish_cnt - 1];
+                    void *tile1_ptr  = mpp_buffer_get_ptr(buf);
 
+                    mpp_buffer_sync_ro_partial_begin(buf, tile1_offset, slice_len);
                     memcpy(ptr + seg_offset, tile1_ptr + tile1_offset, slice_len);
                     tile1_offset += slice_len;
                 }
@@ -2872,8 +3174,8 @@ MPP_RET hal_h265e_v580_wait(void *hal, HalEncTask *task)
             }
         } while (1);
     } else {
-        H265eV580StatusElem *elem = (H265eV580StatusElem *)ctx->reg_out;
-        H265eV580RegSet *regs = (H265eV580RegSet *)ctx->regs[0];
+        H265eV580StatusElem *elem = frm->regs_ret[0];
+        H265eV580RegSet *regs = frm->regs_set[0];
         hevc_vepu580_base *reg_base = &regs->reg_base;
         RK_U32 type = reg_base->reg0236_synt_nal.nal_unit_type;
         MppPacket pkt = enc_task->packet;
@@ -2888,10 +3190,13 @@ MPP_RET hal_h265e_v580_wait(void *hal, HalEncTask *task)
         }
 
         for (i = 0; i < ctx->tile_num; i++) {
-            H265eV580StatusElem *elem_ret = (H265eV580StatusElem *)ctx->reg_out[i];
+            H265eV580StatusElem *elem_ret = frm->regs_ret[i];
             RK_U32 hw_status = elem_ret->hw_status;
             RK_U32 tile_size = elem_ret->st.bs_lgth_l32;
 
+            ret = hal_h265e_vepu580_status_check(hw_status);
+            if (ret)
+                break;
             mpp_packet_add_segment_info(pkt, type, offset, tile_size);
             offset += tile_size;
 
@@ -2907,43 +3212,71 @@ MPP_RET hal_h265e_v580_wait(void *hal, HalEncTask *task)
     }
 
     hal_h265e_leave();
+
     return ret;
 }
 
 MPP_RET hal_h265e_v580_get_task(void *hal, HalEncTask *task)
 {
     H265eV580HalContext *ctx = (H265eV580HalContext *)hal;
-    MppFrame frame = task->frame;
+    Vepu580H265eFrmCfg *frm_cfg = NULL;
     EncFrmStatus  *frm_status = &task->rc_task->frm;
+    MppFrame frame = task->frame;
+    RK_S32 task_idx = ctx->task_idx;
 
     hal_h265e_enter();
 
-    if (vepu580_h265_setup_hal_bufs(ctx)) {
-        hal_h265e_err("vepu541_h265_allocate_buffers failed, free buffers and return\n");
-        task->flags.err |= HAL_ENC_TASK_ERR_ALLOC;
-        return MPP_ERR_MALLOC;
-    }
-
-    if (!frm_status->reencode)
-        ctx->last_frame_type = ctx->frame_type;
-
-    if (frm_status->is_intra) {
-        ctx->frame_type = INTRA_FRAME;
-    } else {
-        ctx->frame_type = INTER_P_FRAME;
-    }
-    if (!frm_status->reencode && mpp_frame_has_meta(task->frame)) {
-        MppMeta meta = mpp_frame_get_meta(frame);
-
-        mpp_meta_get_ptr_d(meta, KEY_ROI_DATA2, (void **)&ctx->roi_data, NULL);
-        mpp_meta_get_ptr_d(meta, KEY_OSD_DATA, (void **)&ctx->osd_cfg.osd_data, NULL);
-        mpp_meta_get_ptr_d(meta, KEY_OSD_DATA2, (void **)&ctx->osd_cfg.osd_data2, NULL);
-    }
-    memset(&ctx->feedback, 0, sizeof(vepu580_h265_fbk));
     task->part_first = 1;
     task->part_last = 0;
+    task->flags.reg_idx = task_idx;
 
-    mpp_dev_multi_offset_reset(ctx->reg_cfg);
+    if (!frm_status->reencode) {
+        ctx->syn = (H265eSyntax_new *)task->syntax.data;
+        ctx->dpb = (H265eDpb*)ctx->syn->dpb;
+
+        if (vepu580_h265_setup_hal_bufs(ctx)) {
+            hal_h265e_err("vepu541_h265_allocate_buffers failed, free buffers and return\n");
+            task->flags.err |= HAL_ENC_TASK_ERR_ALLOC;
+            return MPP_ERR_MALLOC;
+        }
+
+        ctx->last_frame_type = ctx->frame_type;
+
+        frm_cfg = ctx->frms[task_idx];
+        ctx->frm = frm_cfg;
+
+        if (mpp_frame_has_meta(task->frame)) {
+            MppMeta meta = mpp_frame_get_meta(frame);
+
+            mpp_meta_get_ptr_d(meta, KEY_ROI_DATA2, (void **)&frm_cfg->roi_data, NULL);
+            mpp_meta_get_ptr_d(meta, KEY_OSD_DATA, (void **)&frm_cfg->osd_cfg.osd_data, NULL);
+            mpp_meta_get_ptr_d(meta, KEY_OSD_DATA2, (void **)&frm_cfg->osd_cfg.osd_data2, NULL);
+        } else {
+            frm_cfg->roi_data = NULL;
+            frm_cfg->osd_cfg.osd_data = NULL;
+            frm_cfg->osd_cfg.osd_data2 = NULL;
+        }
+
+        frm_cfg->frame_count = ctx->frame_count++;
+
+        ctx->task_idx++;
+        if (ctx->task_idx >= ctx->task_cnt)
+            ctx->task_idx = 0;
+
+        frm_cfg->hal_curr_idx = ctx->syn->sp.recon_pic.slot_idx;
+        frm_cfg->hal_refr_idx = ctx->syn->sp.ref_pic.slot_idx;
+
+        h265e_dpb_hal_start(ctx->dpb, frm_cfg->hal_curr_idx);
+        h265e_dpb_hal_start(ctx->dpb, frm_cfg->hal_refr_idx);
+    } else {
+        /* reencode path may change the frame type */
+        frm_cfg = ctx->frm;
+    }
+
+    ctx->frame_type = (frm_status->is_intra) ? INTRA_FRAME : INTER_P_FRAME;
+    frm_cfg->frame_type = ctx->frame_type;
+    mpp_dev_multi_offset_reset(frm_cfg->reg_cfg);
+    memset(&frm_cfg->feedback, 0, sizeof(frm_cfg->feedback));
 
     hal_h265e_leave();
     return MPP_OK;
@@ -2953,12 +3286,15 @@ MPP_RET hal_h265e_v580_ret_task(void *hal, HalEncTask *task)
 {
     H265eV580HalContext *ctx = (H265eV580HalContext *)hal;
     HalEncTask *enc_task = task;
-    vepu580_h265_fbk *fb = &ctx->feedback;
+    EncRcTaskInfo *rc_info = &task->rc_task->info;
+    RK_S32 task_idx = task->flags.reg_idx;
+    Vepu580H265eFrmCfg *frm = ctx->frms[task_idx];
+    Vepu580H265Fbk *fb = &frm->feedback;
 
     hal_h265e_enter();
 
     if (ctx->tile_parall_en) {
-        RK_U32 i = 0, stream_len = 0;;
+        RK_U32 i = 0, stream_len = 0;
         RK_U32 offset = mpp_packet_get_length(enc_task->packet);
         void* ptr = mpp_packet_get_pos(enc_task->packet);
 
@@ -2967,7 +3303,10 @@ MPP_RET hal_h265e_v580_ret_task(void *hal, HalEncTask *task)
             if (!ctx->cfg->split.split_out) {
                 if (i) {  //copy tile 1 stream
                     RK_U32 len = fb->out_strm_size - stream_len;
-                    void *tile1_ptr  = mpp_buffer_get_ptr(ctx->hw_tile_stream[i - 1]);
+                    MppBuffer buf = frm->hw_tile_stream[i - 1];
+                    void *tile1_ptr  = mpp_buffer_get_ptr(buf);
+
+                    mpp_buffer_sync_ro_partial_begin(buf, 0, len);
                     memcpy(ptr + stream_len + offset, tile1_ptr, len);
                 }
                 stream_len = fb->out_strm_size;
@@ -2977,10 +3316,23 @@ MPP_RET hal_h265e_v580_ret_task(void *hal, HalEncTask *task)
         vepu580_h265_set_feedback(ctx, enc_task, ctx->tile_num - 1);
     }
 
+    rc_info->sse = fb->sse_sum;
+    rc_info->lvl64_inter_num = fb->st_lvl64_inter_num;
+    rc_info->lvl32_inter_num = fb->st_lvl32_inter_num;
+    rc_info->lvl16_inter_num = fb->st_lvl16_inter_num;
+    rc_info->lvl8_inter_num  = fb->st_lvl8_inter_num;
+    rc_info->lvl32_intra_num = fb->st_lvl32_intra_num;
+    rc_info->lvl16_intra_num = fb->st_lvl16_intra_num;
+    rc_info->lvl8_intra_num  = fb->st_lvl8_intra_num;
+    rc_info->lvl4_intra_num  = fb->st_lvl4_intra_num;
+
     enc_task->hw_length = fb->out_strm_size;
     enc_task->length += fb->out_strm_size;
 
     vepu580_h265e_tune_stat_update(ctx->tune);
+
+    h265e_dpb_hal_end(ctx->dpb, frm->hal_curr_idx);
+    h265e_dpb_hal_end(ctx->dpb, frm->hal_refr_idx);
 
     hal_h265e_dbg_detail("output stream size %d\n", fb->out_strm_size);
 

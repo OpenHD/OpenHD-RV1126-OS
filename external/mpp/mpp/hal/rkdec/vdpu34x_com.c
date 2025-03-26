@@ -17,11 +17,13 @@
 #define MODULE_TAG "vdpu34x_com"
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "mpp_log.h"
 #include "mpp_buffer.h"
 #include "mpp_common.h"
 #include "mpp_compat_impl.h"
+#include "mpp_env.h"
 
 #include "vdpu34x_com.h"
 
@@ -147,15 +149,80 @@ void vdpu34x_setup_rcb(Vdpu34xRegCommonAddr *reg, MppDev dev, MppBuffer buf, Vdp
     }
 }
 
-RK_S32 vdpu34x_compare_rcb_size(const void *a, const void *b)
+static RK_S32 vdpu34x_compare_rcb_size(const void *a, const void *b)
 {
-    RK_S32 val = 0;
     Vdpu34xRcbInfo *p0 = (Vdpu34xRcbInfo *)a;
     Vdpu34xRcbInfo *p1 = (Vdpu34xRcbInfo *)b;
 
-    val = (p0->size > p1->size) ? -1 : 1;
+    return (p0->size > p1->size) ? -1 : 1;
+}
 
-    return val;
+RK_S32 vdpu34x_set_rcbinfo(MppDev dev, Vdpu34xRcbInfo *rcb_info)
+{
+    MppDevRcbInfoCfg rcb_cfg;
+    RK_U32 i;
+    /*
+     * RCB_SET_BY_SIZE_SORT_MODE: by size sort
+     * RCB_SET_BY_PRIORITY_MODE: by priority
+     */
+    Vdpu34xRcbSetMode_e set_rcb_mode = RCB_SET_BY_PRIORITY_MODE;
+    RK_U32 rcb_priority[RCB_BUF_COUNT] = {
+        RCB_DBLK_ROW,
+        RCB_INTRA_ROW,
+        RCB_SAO_ROW,
+        RCB_INTER_ROW,
+        RCB_FBC_ROW,
+        RCB_TRANSD_ROW,
+        RCB_STRMD_ROW,
+        RCB_INTER_COL,
+        RCB_FILT_COL,
+        RCB_TRANSD_COL,
+    };
+
+    switch (set_rcb_mode) {
+    case RCB_SET_BY_SIZE_SORT_MODE : {
+        Vdpu34xRcbInfo info[RCB_BUF_COUNT];
+
+        memcpy(info, rcb_info, sizeof(info));
+        qsort(info, MPP_ARRAY_ELEMS(info),
+              sizeof(info[0]), vdpu34x_compare_rcb_size);
+
+        for (i = 0; i < MPP_ARRAY_ELEMS(info); i++) {
+            rcb_cfg.reg_idx = info[i].reg;
+            rcb_cfg.size = info[i].size;
+            if (rcb_cfg.size > 0) {
+                mpp_dev_ioctl(dev, MPP_DEV_RCB_INFO, &rcb_cfg);
+            } else
+                break;
+        }
+    } break;
+    case RCB_SET_BY_PRIORITY_MODE : {
+        Vdpu34xRcbInfo *info = rcb_info;
+        RK_U32 index = 0;
+
+        for (i = 0; i < MPP_ARRAY_ELEMS(rcb_priority); i ++) {
+            index = rcb_priority[i];
+            /*
+             * If the inter row rcb buffer is placed in sram,
+             * may conflict with other buffer in ddr,
+             * will result in slower access to data and degraded decoding performance.
+             * The issue will be resolved in chips after rk3588.
+             */
+            if (index == RCB_INTER_ROW)
+                continue;
+
+            rcb_cfg.reg_idx = info[index].reg;
+            rcb_cfg.size = info[index].size;
+            if (rcb_cfg.size > 0) {
+                mpp_dev_ioctl(dev, MPP_DEV_RCB_INFO, &rcb_cfg);
+            }
+        }
+    } break;
+    default:
+        break;
+    }
+
+    return 0;
 }
 
 void vdpu34x_setup_statistic(Vdpu34xRegCommon *com, Vdpu34xRegStatistic *sta)
@@ -183,9 +250,16 @@ void vdpu34x_afbc_align_calc(MppBufSlots slots, MppFrame frame, RK_U32 expand)
 {
     RK_U32 ver_stride = 0;
     RK_U32 img_height = mpp_frame_get_height(frame);
+    RK_U32 img_width = mpp_frame_get_width(frame);
+    RK_U32 hdr_stride = (*compat_ext_fbc_hdr_256_odd) ?
+                        (MPP_ALIGN(img_width, 256) | 256) :
+                        (MPP_ALIGN(img_width, 64));
 
     mpp_slots_set_prop(slots, SLOTS_HOR_ALIGN, mpp_align_64);
     mpp_slots_set_prop(slots, SLOTS_VER_ALIGN, mpp_align_16);
+
+    mpp_frame_set_fbc_hdr_stride(frame, hdr_stride);
+
     ver_stride = mpp_align_16(img_height);
     if (*compat_ext_fbc_buf_size) {
         ver_stride += expand;

@@ -27,6 +27,8 @@ NOTE:
    RK29XX/RK30XX/RK31XX
    RK3288/RK3368/RK3399
    RK3228/RK3229/RK3228H/RK3328
+   RK3528/RK3528A
+   RK3562
    RK3566/RK3568
    RK3588
    RV1108/RV1107
@@ -39,6 +41,7 @@ NOTE:
 5. offical github: https://github.com/rockchip-linux/mpp
    develop github: https://github.com/HermanChen/mpp
    develop gitee : https://gitee.com/hermanchen82/mpp
+6. Commit message format should base on https://keepachangelog.com/en/1.0.0/
 
 More document can be found at http://opensource.rock-chips.com/wiki_Mpp
 

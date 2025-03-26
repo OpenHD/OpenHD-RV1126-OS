@@ -48,6 +48,11 @@ typedef enum Vdpu382_RCB_TYPE_E {
     RCB_BUF_COUNT,
 } Vdpu382RcbType_e;
 
+typedef enum Vdpu382_RCB_SET_MODE_E {
+    RCB_SET_BY_SIZE_SORT_MODE,
+    RCB_SET_BY_PRIORITY_MODE,
+} Vdpu382RcbSetMode_e;
+
 /* base: OFFSET_COMMON_REGS */
 typedef struct Vdpu382RegCommon_t {
     struct SWREG8_IN_OUT {
@@ -101,7 +106,7 @@ typedef struct Vdpu382RegCommon_t {
     } reg011;
 
     struct SWREG12_SENCODARY_EN {
-        RK_U32      wr_ddr_align_en         : 1;
+        RK_U32      reserve0                : 1;
         RK_U32      colmv_compress_en       : 1;
         RK_U32      fbc_e                   : 1;
         RK_U32      tile_e                  : 1;
@@ -136,20 +141,6 @@ typedef struct Vdpu382RegCommon_t {
         RK_U32      reserve8            : 6; //change to reg205[5]
         RK_U32      filter_outbuf_mode  : 1;
 
-        /* develop branch */
-        // RK_U32      reserve5                    : 2;
-        // RK_U32      h26x_error_mode             : 1;
-        // RK_U32      reserve6                    : 2;
-        // RK_U32      ycacherd_prior              : 1;
-        // RK_U32      reserve7                    : 2;
-        // RK_U32      cur_pic_is_idr              : 1;
-        // RK_U32      reserve8                    : 1;
-        // RK_U32      right_auto_rst_disable      : 1;
-        // RK_U32      frame_end_err_rst_flag      : 1;
-        // RK_U32      rd_prior_mode               : 1;
-        // RK_U32      rd_ctrl_prior_mode          : 1;
-        // RK_U32      reserved9                   : 1;
-        // RK_U32      filter_outbuf_mode          : 1;
     } reg013;
 
     struct SWREG14_FBC_PARAM_SET {
@@ -241,8 +232,20 @@ typedef struct Vdpu382RegCommon_t {
     } reg025;
 
     struct SWREG26_BLOCK_GATING_EN {
-        RK_U32      swreg_block_gating_e    : 20;
-        RK_U32      reserve                 : 11;
+        RK_U32      inter_auto_gating_e     : 1;
+        RK_U32      filterd_auto_gating_e   : 1;
+        RK_U32      strmd_auto_gating_e     : 1;
+        RK_U32      mcp_auto_gating_e       : 1;
+        RK_U32      busifd_auto_gating_e    : 1;
+        RK_U32      reserved                : 3;
+        RK_U32      dec_ctrl_auto_gating_e  : 1;
+        RK_U32      intra_auto_gating_e     : 1;
+        RK_U32      mc_auto_gating_e        : 1;
+        RK_U32      transd_auto_gating_e    : 1;
+        RK_U32      reserved1               : 4;
+        RK_U32      sram_auto_gating_e      : 1;
+        RK_U32      cru_auto_gating_e       : 1;
+        RK_U32      reserved2               : 13;
         RK_U32      reg_cfg_gating_en       : 1;
     } reg026;
 
@@ -299,6 +302,25 @@ typedef struct Vdpu382RegCommon_t {
     /* NOTE: reg027 ~ reg032 are added in vdpu38x at rk3588 */
     /* NOTE: timeout must be config in vdpu38x */
     RK_U32  reg032_timeout_threshold;
+
+    struct SW033_LINE_IRQ_CTRL {
+        RK_U32 dec_line_irq_step              : 12;
+        RK_U32 dec_line_offset_y_st           : 12;
+        RK_U32 buf_empty_timeout_threshold    : 8;
+    } reg033;
+
+    /* 0x00000088 reg34 */
+    struct SW034_SCALE_DOWN_ROI_OFFSET {
+        RK_U32 scale_down_roi_st_offsetx    : 16;
+        RK_U32 scale_down_roi_st_offsety    : 16;
+    } reg034;
+
+    /* 0x0000008c reg35 */
+    struct SW035_SCALE_DOWN_ROI_OUT_SIZE {
+        RK_U32 scale_down_roi_out_width     : 16;
+        RK_U32 scale_down_roi_out_height    : 16;
+    } reg035;
+
 } Vdpu382RegCommon;
 
 /* base: OFFSET_COMMON_ADDR_REGS */
@@ -333,6 +355,8 @@ typedef struct Vdpu382RegCommonAddr_t {
     RK_U32  reg141_rcb_fbc_base;
 
     RK_U32  reg142_rcb_filter_col_base;
+
+    RK_U32  reg143_rcb_base;
 } Vdpu382RegCommonAddr;
 
 /* base: OFFSET_COMMON_ADDR_REGS */
@@ -365,9 +389,9 @@ typedef struct Vdpu382RegIrqStatus_t {
     } reg225;
 
     struct SWREG226_STA_CABAC_ERROR_STATUS {
-        RK_U32      strmd_error_status      : 28;
-        RK_U32      strmd_detect_error_flag : 3;
         RK_U32      all_frame_error_flag    : 1;
+        RK_U32      strmd_detect_error_flag : 3;
+        RK_U32      strmd_error_status      : 28;
     } reg226;
 
     struct SWREG227_STA_COLMV_ERROR_REF_PICIDX {
@@ -382,9 +406,9 @@ typedef struct Vdpu382RegIrqStatus_t {
         RK_U32                              : 4;
     } reg228;
 
-    struct SWREG229_STA_SAOWR_CTU_OFFSET {
-        RK_U32      saowr_xoffset : 16;
-        RK_U32      saowr_yoffset : 16;
+    struct SWREG229_STA_AXI_WCH_FINISH_FLAG {
+        RK_U32      axi_wch_finish_flag     : 17;
+        RK_U32      reserved                : 15;
     } reg229;
 
     struct SWREG230_STA_SLICE_DEC_NUM {
@@ -451,15 +475,22 @@ typedef struct Vdpu382RegStatistic_t {
     RK_U32          reg262_perf_wr_axi_total_byte;
     RK_U32          reg263_perf_working_cnt;
 
-    RK_U32          reserve_reg264;
+    struct SWREG264_DEBUG_BUS_STATE {
+        RK_U32      bus_state_flag      : 25;
+        RK_U32      reserve             : 7;
+    } reg264;
 
-    struct SWREG265_DEBUG_PERF_SEL {
-        RK_U32      perf_cnt0_sel               : 6;
-        RK_U32      reserve0                    : 2;
-        RK_U32      perf_cnt1_sel               : 6;
-        RK_U32      reserve1                    : 2;
-        RK_U32      perf_cnt2_sel               : 6;
-        RK_U32      reserve2                    : 10;
+    union {
+        struct {
+            RK_U32      perf_cnt0_sel               : 6;
+            RK_U32      reserve0                    : 2;
+            RK_U32      perf_cnt1_sel               : 6;
+            RK_U32      reserve1                    : 2;
+            RK_U32      perf_cnt2_sel               : 6;
+            RK_U32      reserve2                    : 10;
+        };
+
+        RK_U32 link_perf_cnt0;
     } reg265;
 
     RK_U32          reg266_perf_cnt0;
@@ -471,14 +502,14 @@ typedef struct Vdpu382RegStatistic_t {
     struct SWREG270_DEBUG_QOS_CTRL {
         RK_U32      bus2mc_buffer_qos_level     : 8;
         RK_U32      reserve0                    : 8;
-        RK_U32      axi_rd_hurry_level          : 2;
-        RK_U32      reserve1                    : 2;
-        RK_U32      axi_wr_qos                  : 2;
-        RK_U32      reserve2                    : 2;
-        RK_U32      axi_wr_hurry_level          : 2;
-        RK_U32      reserve3                    : 2;
-        RK_U32      axi_rd_qos                  : 2;
-        RK_U32      reserve4                    : 2;
+        RK_U32      axi_wr_hurry_level          : 3;
+        RK_U32      reserve1                    : 1;
+        RK_U32      axi_wr_qos                  : 3;
+        RK_U32      reserve2                    : 1;
+        RK_U32      axi_rd_hurry_level          : 3;
+        RK_U32      reserve3                    : 1;
+        RK_U32      axi_rd_qos                  : 3;
+        RK_U32      reserve4                    : 1;
     } reg270;
 
     RK_U32          reg271_wr_wait_cycle_qos;
@@ -495,8 +526,8 @@ typedef struct Vdpu382RegStatistic_t {
     } reg272;
 
     struct SWREG273 {
-        RK_U32      bus_status_flag             : 19;
-        RK_U32      reserve0                    : 12;
+        RK_U32      bus_status_flag             : 25;
+        RK_U32      reserve0                    : 6;
         RK_U32      pps_no_ref_bframe_dec_r     : 1;
     } reg273;
 
@@ -533,6 +564,7 @@ extern "C" {
 RK_S32 vdpu382_get_rcb_buf_size(Vdpu382RcbInfo *info, RK_S32 width, RK_S32 height);
 void vdpu382_setup_rcb(Vdpu382RegCommonAddr *reg, MppDev dev, MppBuffer buf, Vdpu382RcbInfo *info);
 RK_S32 vdpu382_compare_rcb_size(const void *a, const void *b);
+RK_S32 vdpu382_set_rcbinfo(MppDev dev, Vdpu382RcbInfo *rcb_info);
 void vdpu382_setup_statistic(Vdpu382RegCommon *com, Vdpu382RegStatistic *sta);
 void vdpu382_afbc_align_calc(MppBufSlots slots, MppFrame frame, RK_U32 expand);
 void vdpu382_setup_down_scale(MppFrame frame, MppDev dev, Vdpu382RegCommon *com);

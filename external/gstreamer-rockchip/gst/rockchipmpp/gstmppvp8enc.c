@@ -30,8 +30,8 @@
 
 #include "gstmppvp8enc.h"
 
-#define GST_MPP_Vp8_ENC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
-    GST_TYPE_MPP_Vp8_ENC, GstMppVp8Enc))
+#define GST_MPP_VP8_ENC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), \
+    GST_TYPE_MPP_VP8_ENC, GstMppVp8Enc))
 
 #define GST_CAT_DEFAULT mpp_vp8_enc_debug
 GST_DEBUG_CATEGORY (GST_CAT_DEFAULT);
@@ -43,6 +43,9 @@ struct _GstMppVp8Enc
   guint qp_init;
   guint qp_min;
   guint qp_max;
+  guint qp_min_i;
+  guint qp_max_i;
+  gint qp_ip;
 };
 
 #define parent_class gst_mpp_vp8_enc_parent_class
@@ -51,6 +54,9 @@ G_DEFINE_TYPE (GstMppVp8Enc, gst_mpp_vp8_enc, GST_TYPE_MPP_ENC);
 #define DEFAULT_PROP_QP_INIT 40
 #define DEFAULT_PROP_QP_MIN 0
 #define DEFAULT_PROP_QP_MAX 127
+#define DEFAULT_PROP_QP_MIN_I 0
+#define DEFAULT_PROP_QP_MAX_I 127
+#define DEFAULT_PROP_QP_IP 6
 
 enum
 {
@@ -58,34 +64,35 @@ enum
   PROP_QP_INIT,
   PROP_QP_MIN,
   PROP_QP_MAX,
+  PROP_QP_MIN_I,
+  PROP_QP_MAX_I,
+  PROP_QP_IP,
   PROP_LAST,
 };
+
+#define GST_MPP_VP8_ENC_SIZE_CAPS \
+    "width  = (int) [ 128, MAX ], height = (int) [ 64, MAX ]"
 
 static GstStaticPadTemplate gst_mpp_vp8_enc_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-vp8, "
-        "width  = (int) [ 128, 1920 ], "
-        "height = (int) [ 64, 1088 ], " "framerate = " GST_VIDEO_FPS_RANGE)
-    );
+    GST_STATIC_CAPS ("video/x-vp8, " GST_MPP_VP8_ENC_SIZE_CAPS));
 
 static GstStaticPadTemplate gst_mpp_vp8_enc_sink_template =
-    GST_STATIC_PAD_TEMPLATE ("sink",
+GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw,"
         "format = (string) { " MPP_ENC_FORMATS " }, "
-        "width  = (int) [ 128, 1920 ], "
-        "height = (int) [ 64, 1088 ], "
-        "framerate = " GST_VIDEO_FPS_RANGE ";"));
+        GST_MPP_VP8_ENC_SIZE_CAPS));
 
 static void
 gst_mpp_vp8_enc_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec)
 {
   GstVideoEncoder *encoder = GST_VIDEO_ENCODER (object);
-  GstMppVp8Enc *self = GST_MPP_Vp8_ENC (encoder);
+  GstMppVp8Enc *self = GST_MPP_VP8_ENC (encoder);
   GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
   switch (prop_id) {
@@ -113,6 +120,30 @@ gst_mpp_vp8_enc_set_property (GObject * object,
       self->qp_max = qp_max;
       break;
     }
+    case PROP_QP_MIN_I:{
+      guint qp_min_i = g_value_get_uint (value);
+      if (self->qp_min_i == qp_min_i)
+        return;
+
+      self->qp_min_i = qp_min_i;
+      break;
+    }
+    case PROP_QP_MAX_I:{
+      guint qp_max_i = g_value_get_uint (value);
+      if (self->qp_max_i == qp_max_i)
+        return;
+
+      self->qp_max_i = qp_max_i;
+      break;
+    }
+    case PROP_QP_IP:{
+      gint qp_ip = g_value_get_int (value);
+      if (self->qp_ip == qp_ip)
+        return;
+
+      self->qp_ip = qp_ip;
+      break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       return;
@@ -126,7 +157,7 @@ gst_mpp_vp8_enc_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec)
 {
   GstVideoEncoder *encoder = GST_VIDEO_ENCODER (object);
-  GstMppVp8Enc *self = GST_MPP_Vp8_ENC (encoder);
+  GstMppVp8Enc *self = GST_MPP_VP8_ENC (encoder);
 
   switch (prop_id) {
     case PROP_QP_INIT:
@@ -138,6 +169,15 @@ gst_mpp_vp8_enc_get_property (GObject * object,
     case PROP_QP_MAX:
       g_value_set_uint (value, self->qp_max);
       break;
+    case PROP_QP_MIN_I:
+      g_value_set_uint (value, self->qp_min_i);
+      break;
+    case PROP_QP_MAX_I:
+      g_value_set_uint (value, self->qp_max_i);
+      break;
+    case PROP_QP_IP:
+      g_value_set_int (value, self->qp_ip);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -147,15 +187,18 @@ gst_mpp_vp8_enc_get_property (GObject * object,
 static gboolean
 gst_mpp_vp8_enc_apply_properties (GstVideoEncoder * encoder)
 {
-  GstMppVp8Enc *self = GST_MPP_Vp8_ENC (encoder);
+  GstMppVp8Enc *self = GST_MPP_VP8_ENC (encoder);
   GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
   if (!mppenc->prop_dirty)
     return TRUE;
 
-  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "vp8:qp_init", self->qp_init);
-  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "vp8:qp_max", self->qp_max);
-  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "vp8:qp_min", self->qp_min);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "rc:qp_init", self->qp_init);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "rc:qp_min", self->qp_min);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "rc:qp_max", self->qp_max);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "rc:qp_min_i", self->qp_min_i);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "rc:qp_max_i", self->qp_max_i);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "rc:qp_ip", self->qp_ip);
   mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "vp8:disable_ivf", 1);
 
   return gst_mpp_enc_apply_properties (encoder);
@@ -200,6 +243,9 @@ gst_mpp_vp8_enc_init (GstMppVp8Enc * self)
   self->qp_init = DEFAULT_PROP_QP_INIT;
   self->qp_min = DEFAULT_PROP_QP_MIN;
   self->qp_max = DEFAULT_PROP_QP_MAX;
+  self->qp_min_i = DEFAULT_PROP_QP_MIN_I;
+  self->qp_max_i = DEFAULT_PROP_QP_MAX_I;
+  self->qp_ip = DEFAULT_PROP_QP_IP;
 }
 
 static void
@@ -236,6 +282,21 @@ gst_mpp_vp8_enc_class_init (GstMppVp8EncClass * klass)
           "Max QP", 0, 127, DEFAULT_PROP_QP_MAX,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
+  g_object_class_install_property (gobject_class, PROP_QP_MIN_I,
+      g_param_spec_int ("qp-min-i", "Min Intra QP",
+          "Min Intra QP", 0, 127, DEFAULT_PROP_QP_MIN_I,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_QP_MAX_I,
+      g_param_spec_int ("qp-max-i", "Max Intra QP",
+          "Max Intra QP", 0, 127, DEFAULT_PROP_QP_MAX_I,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_QP_IP,
+      g_param_spec_int ("qp-delta-ip", "Delta QP between I and P",
+          "Delta QP between I and P", -1, 8, DEFAULT_PROP_QP_IP,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&gst_mpp_vp8_enc_src_template));
 
@@ -246,4 +307,18 @@ gst_mpp_vp8_enc_class_init (GstMppVp8EncClass * klass)
       "Rockchip Mpp VP8 Encoder", "Codec/Encoder/Video",
       "Encode video streams via Rockchip Mpp",
       "Jeffy Chen <jeffy.chen@rock-chips.com>");
+}
+
+gboolean
+gst_mpp_vp8_enc_register (GstPlugin * plugin, guint rank)
+{
+  if (!gst_mpp_enc_supported (MPP_VIDEO_CodingVP8))
+    return FALSE;
+
+  if (g_getenv ("GST_MPP_VP8ENC_FAKE_VP8ENC"))
+    gst_element_register (plugin, "vp8enc", GST_RANK_PRIMARY,
+        gst_mpp_vp8_enc_get_type ());
+
+  return gst_element_register (plugin, "mppvp8enc", rank,
+      gst_mpp_vp8_enc_get_type ());
 }

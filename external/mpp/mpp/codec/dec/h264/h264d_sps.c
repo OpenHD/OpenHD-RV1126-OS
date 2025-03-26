@@ -48,6 +48,7 @@ static MPP_RET read_hrd_parameters(BitReadCtx_t *p_bitctx, H264_HRD_t *hrd)
     RK_U32 SchedSelIdx = 0;
     MPP_RET ret = MPP_ERR_UNKNOW;
     READ_UE(p_bitctx, &hrd->cpb_cnt_minus1);
+    VAL_CHECK(ret, hrd->cpb_cnt_minus1 < MAXIMUMVALUEOFcpb_cnt);
     hrd->cpb_cnt_minus1 += 1;
     READ_BITS(p_bitctx, 4, &hrd->bit_rate_scale);
     READ_BITS(p_bitctx, 4, &hrd->cpb_size_scale);
@@ -67,6 +68,8 @@ static MPP_RET read_hrd_parameters(BitReadCtx_t *p_bitctx, H264_HRD_t *hrd)
     return ret = MPP_OK;
 __BITREAD_ERR:
     return ret = p_bitctx->ret;
+__FAILED:
+    return ret;
 }
 
 static void init_VUI(H264_VUI_t *vui)
@@ -177,6 +180,7 @@ static MPP_RET parser_sps(BitReadCtx_t *p_bitctx, H264_SPS_t *cur_sps, H264_DecC
     cur_sps->separate_colour_plane_flag           = 0;
     cur_sps->log2_max_pic_order_cnt_lsb_minus4    = 0;
     cur_sps->delta_pic_order_always_zero_flag     = 0;
+    p_Dec->errctx.un_spt_flag = 0; // init unspport flag first
 
     READ_BITS(p_bitctx, 8, &cur_sps->profile_idc);
     VAL_CHECK (ret, (cur_sps->profile_idc == H264_PROFILE_BASELINE)
@@ -200,7 +204,7 @@ static MPP_RET parser_sps(BitReadCtx_t *p_bitctx, H264_SPS_t *cur_sps, H264_DecC
     ASSERT(temp == 0);
     READ_BITS(p_bitctx, 8, &cur_sps->level_idc);
     READ_UE(p_bitctx, &cur_sps->seq_parameter_set_id);
-    if (cur_sps->seq_parameter_set_id < 0 || cur_sps->seq_parameter_set_id >= MAXSPS) {
+    if (cur_sps->seq_parameter_set_id >= MAXSPS) {
         cur_sps->seq_parameter_set_id = 0;
     }
     if (cur_sps->profile_idc == 100 || cur_sps->profile_idc == 110
@@ -219,6 +223,11 @@ static MPP_RET parser_sps(BitReadCtx_t *p_bitctx, H264_SPS_t *cur_sps, H264_DecC
         READ_UE(p_bitctx, &cur_sps->bit_depth_chroma_minus8);
         ASSERT(cur_sps->bit_depth_chroma_minus8 < 7);
         READ_ONEBIT(p_bitctx, &cur_sps->qpprime_y_zero_transform_bypass_flag);
+        if (cur_sps->qpprime_y_zero_transform_bypass_flag == 1) {
+            H264D_ERR("ERROR: Not support high 4:4:4 lossless mode");
+            p_Dec->errctx.un_spt_flag = MPP_FRAME_ERR_UNSUPPORT;
+            goto __FAILED;
+        }
         READ_ONEBIT(p_bitctx, &cur_sps->seq_scaling_matrix_present_flag);
         if (cur_sps->seq_scaling_matrix_present_flag) {
             H264D_WARNNING("Scaling matrix present.");
@@ -242,7 +251,7 @@ static MPP_RET parser_sps(BitReadCtx_t *p_bitctx, H264_SPS_t *cur_sps, H264_DecC
         READ_SE(p_bitctx, &cur_sps->offset_for_non_ref_pic);
         READ_SE(p_bitctx, &cur_sps->offset_for_top_to_bottom_field);
         READ_UE(p_bitctx, &cur_sps->num_ref_frames_in_pic_order_cnt_cycle);
-        ASSERT(cur_sps->num_ref_frames_in_pic_order_cnt_cycle < 256);
+        VAL_CHECK(ret, cur_sps->num_ref_frames_in_pic_order_cnt_cycle < 256);
         for (i = 0; i < cur_sps->num_ref_frames_in_pic_order_cnt_cycle; ++i) {
             READ_SE(p_bitctx, &cur_sps->offset_for_ref_frame[i]);
             cur_sps->expected_delta_per_pic_order_cnt_cycle += cur_sps->offset_for_ref_frame[i];
@@ -287,6 +296,7 @@ static MPP_RET sps_mvc_extension(BitReadCtx_t *p_bitctx, H264_subSPS_t *subset_s
     RK_S32 i = 0, j = 0, num_views = 0;
 
     READ_UE(p_bitctx, &subset_sps->num_views_minus1);
+    VAL_CHECK(ret, subset_sps->num_views_minus1 < 16);
     num_views = 1 + subset_sps->num_views_minus1;
     //========================
     if (num_views > 0) {
@@ -539,7 +549,7 @@ MPP_RET process_subsps(H264_SLICE_t *currSlice)
     get_max_dec_frame_buf_size(&cur_subsps->sps);
     //!< make subSPS available
     if (!currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id])
-        currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id] = mpp_malloc(H264_subSPS_t, 1);
+        currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id] = mpp_calloc(H264_subSPS_t, 1);
     p_subset = currSlice->p_Vid->subspsSet[cur_subsps->sps.seq_parameter_set_id];
     if (p_subset->Valid) {
         recycle_subsps(p_subset);
@@ -572,20 +582,23 @@ MPP_RET activate_sps(H264dVideoCtx_t *p_Vid, H264_SPS_t *sps, H264_subSPS_t *sub
         p_Vid->active_subsps = subset_sps;
         p_Vid->active_sps_id[0] = 0;
         p_Vid->active_sps_id[1] = subset_sps->sps.seq_parameter_set_id;
-        VAL_CHECK(ret, subset_sps->sps.seq_parameter_set_id >= 0);
         if (video_pars_changed(p_Vid, p_Vid->active_sps, 1)) {
             FUN_CHECK(ret = flush_dpb(p_Vid->p_Dpb_layer[1], 2));
             FUN_CHECK(ret = init_dpb(p_Vid, p_Vid->p_Dpb_layer[1], 2));
+            FUN_CHECK(ret = check_mvc_dpb(p_Vid, p_Vid->p_Dpb_layer[0], p_Vid->p_Dpb_layer[1]));
             update_last_video_pars(p_Vid, p_Vid->active_sps, 1);
             //!< init frame slots, store frame buffer size
             p_Vid->dpb_size[1] = p_Vid->p_Dpb_layer[1]->size;
             p_Vid->spspps_update = 1;
+            if (p_Vid->p_Dec->mvc_valid && p_Vid->p_Dpb_layer[1]->size > 0) {
+                p_Vid->p_Dpb_layer[0]->size = MPP_MIN(p_Vid->p_Dpb_layer[1]->size, MAX_DPB_SIZE / 2);
+                p_Vid->dpb_size[0] = p_Vid->p_Dpb_layer[0]->size;
+            }
         }
         VAL_CHECK(ret, p_Vid->dpb_size[1] > 0);
     } else { //!< layer_id == 0
         p_Vid->active_sps = sps;
         p_Vid->active_subsps = NULL;
-        VAL_CHECK(ret, sps->seq_parameter_set_id >= 0);
         p_Vid->active_sps_id[0] = sps->seq_parameter_set_id;
         p_Vid->active_sps_id[1] = 0;
         if (video_pars_changed(p_Vid, p_Vid->active_sps, 0)) {

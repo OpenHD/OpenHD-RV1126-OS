@@ -39,7 +39,7 @@ extern RK_U32 av1d_debug;
 #define AV1D_DBG_STRMIN   (0x00000008)
 #define AV1D_DBG_DUMP_RPU (0x10000000)
 
-#define av1d_dbg(flag, fmt, ...) _mpp_dbg(av1d_debug, flag, fmt, ##__VA_ARGS__)
+#define av1d_dbg(flag, fmt, ...) _mpp_dbg_f(av1d_debug, flag, fmt, ##__VA_ARGS__)
 #define av1d_dbg_func(fmt, ...)  av1d_dbg(AV1D_DBG_FUNCTION, fmt, ## __VA_ARGS__)
 
 typedef struct RefInfo {
@@ -57,6 +57,11 @@ typedef struct RefInfo {
     RK_U32 intra_only;
 } RefInfo;
 
+typedef struct GlobalMtionParams {
+    RK_U32 wmtype;
+    RK_S32 wmmat[6];
+    RK_S32 alpha, beta, gamma, delta;
+} GlobalMtionParams;
 
 typedef struct AV1Frame {
     MppFrame f;
@@ -65,14 +70,12 @@ typedef struct AV1Frame {
     RK_S32 temporal_id;
     RK_S32 spatial_id;
     RK_U8  order_hint;
-    RK_U8  gm_type[AV1_NUM_REF_FRAMES];
-    RK_S32 gm_params[AV1_NUM_REF_FRAMES][6];
+    GlobalMtionParams gm_params[AV1_NUM_REF_FRAMES];
     RK_U8  skip_mode_frame_idx[2];
     AV1RawFilmGrainParams film_grain;
     RK_U8 coded_lossless;
     RefInfo *ref;
 } AV1Frame;
-
 
 typedef struct AV1Context_t {
     BitReadCtx_t gb;
@@ -114,7 +117,8 @@ typedef struct AV1Context_t {
     RK_S32 operating_point;
     RK_S32 extra_has_frame;
     RK_U32 frame_tag_size;
-    RK_U32 obu_len;
+    RK_U32 fist_tile_group;
+    RK_U32 tile_offset;
 
     AV1CDFs *cdfs;
     MvCDFs  *cdfs_ndvc;
@@ -158,7 +162,7 @@ void av1d_parser_update(Av1CodecContext *ctx, void *info);
 
 MPP_RET av1d_paser_reset(Av1CodecContext *ctx);
 
-RK_S32 av1d_split_frame(SplitContext_t *ctx,
+RK_S32 av1d_split_frame(Av1CodecContext *ctx,
                         RK_U8 **out_data, RK_S32 *out_size,
                         RK_U8 *data, RK_S32 size);
 

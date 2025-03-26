@@ -188,7 +188,7 @@ typedef union PaserTaskWait_u {
 
         RK_U32      dec_pkt_idx     : 1;   // 0x1000
         RK_U32      dec_pkt_buf     : 1;   // 0x2000
-        RK_U32      dec_slot_idx    : 1;   // 0x4000
+        RK_U32      dec_slot_idx    : 1;   // 0x4000 MPP_DEC_NOTIFY_SLOT_VALID
     };
 } PaserTaskWait;
 
@@ -224,7 +224,6 @@ typedef struct DecTask_t {
     MppPktTs        ts_cur;
 
     MppBuffer       hal_pkt_buf_in;
-    RK_S32          hal_pkt_idx_in;
     MppBuffer       hal_frm_buf_out;
 } DecTask;
 
@@ -239,7 +238,7 @@ MPP_RET mpp_dec_proc_cfg(MppDecImpl *dec, MpiCmd cmd, void *param);
 
 MPP_RET update_dec_hal_info(MppDecImpl *dec, MppFrame frame);
 void mpp_dec_put_frame(Mpp *mpp, RK_S32 index, HalDecTaskFlag flags);
-void mpp_dec_push_display(Mpp *mpp, HalDecTaskFlag flags);
+RK_S32 mpp_dec_push_display(Mpp *mpp, HalDecTaskFlag flags);
 
 #ifdef __cplusplus
 }

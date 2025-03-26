@@ -41,17 +41,12 @@
 #define MAX_SEGMAP_SIZE_ALIGN_TO_4K MPP_ALIGN(MAX_SEGMAP_SIZE, SZ_4K)
 
 #define VDPU382_OFFSET_COUNT (PROB_SIZE_ALIGN_TO_4K)
-#define VDPU382_OFFSET_SEGID_CUR (PROB_SIZE_ALIGN_TO_4K + COUNT_SIZE_ALIGN_TO_4K)
-#define VDPU382_OFFSET_SEGID_LAST (PROB_SIZE_ALIGN_TO_4K \
-                                + COUNT_SIZE_ALIGN_TO_4K \
-                                + MAX_SEGMAP_SIZE_ALIGN_TO_4K)
-#define VDPU382_PROBE_BUFFER_SIZE (PROB_SIZE_ALIGN_TO_4K \
-                                + COUNT_SIZE_ALIGN_TO_4K \
-                                + MAX_SEGMAP_SIZE_ALIGN_TO_4K * 2)
+#define VDPU382_PROBE_BUFFER_SIZE (PROB_SIZE_ALIGN_TO_4K + COUNT_SIZE_ALIGN_TO_4K)
 
 typedef struct Vdpu382Vp9dCtx_t {
     Vp9dRegBuf      g_buf[MAX_GEN_REG];
     MppBuffer       probe_base;
+    MppBuffer       seg_base;
     RK_U32          offset_count;
     RK_U32          offset_segid_cur;
     RK_U32          offset_segid_last;
@@ -92,8 +87,8 @@ static MPP_RET hal_vp9d_alloc_res(HalVp9dCtx *hal)
     HalVp9dCtx *p_hal = (HalVp9dCtx*)hal;
     Vdpu382Vp9dCtx *hw_ctx = (Vdpu382Vp9dCtx*)p_hal->hw_ctx;
     hw_ctx->offset_count = VDPU382_OFFSET_COUNT;
-    hw_ctx->offset_segid_cur = VDPU382_OFFSET_SEGID_CUR;
-    hw_ctx->offset_segid_last = VDPU382_OFFSET_SEGID_LAST;
+    hw_ctx->offset_segid_cur = 0;
+    hw_ctx->offset_segid_last = MAX_SEGMAP_SIZE_ALIGN_TO_4K;
     /* alloc common buffer */
     for (i = 0; i < VP9_CONTEXT; i++) {
         ret = mpp_buffer_get(p_hal->group, &hw_ctx->prob_loop_base[i], PROB_SIZE);
@@ -125,6 +120,12 @@ static MPP_RET hal_vp9d_alloc_res(HalVp9dCtx *hal)
             return ret;
         }
     }
+
+    ret = mpp_buffer_get(p_hal->group, &hw_ctx->seg_base, MAX_SEGMAP_SIZE_ALIGN_TO_4K * 2);
+    if (ret) {
+        mpp_err("vp9 segid_base get buffer failed\n");
+        return ret;
+    }
     return MPP_OK;
 }
 
@@ -138,7 +139,7 @@ static MPP_RET hal_vp9d_release_res(HalVp9dCtx *hal)
     if (hw_ctx->prob_default_base) {
         ret = mpp_buffer_put(hw_ctx->prob_default_base);
         if (ret) {
-            mpp_err("vp9 probe_wr_base get buffer failed\n");
+            mpp_err("vp9 probe_wr_base put buffer failed\n");
             return ret;
         }
     }
@@ -176,7 +177,7 @@ static MPP_RET hal_vp9d_release_res(HalVp9dCtx *hal)
         if (hw_ctx->probe_base) {
             ret = mpp_buffer_put(hw_ctx->probe_base);
             if (ret) {
-                mpp_err("vp9 probe_base get buffer failed\n");
+                mpp_err("vp9 probe_base put buffer failed\n");
                 return ret;
             }
         }
@@ -201,6 +202,15 @@ static MPP_RET hal_vp9d_release_res(HalVp9dCtx *hal)
             return ret;
         }
     }
+
+    if (hw_ctx->seg_base) {
+        ret = mpp_buffer_put(hw_ctx->seg_base);
+        if (ret) {
+            mpp_err("vp9 seg_base put buffer failed\n");
+            return ret;
+        }
+    }
+
     return MPP_OK;
 }
 
@@ -264,6 +274,12 @@ static MPP_RET hal_vp9d_vdpu382_init(void *hal, MppHalCfg *cfg)
 
         mpp_assert(hw_info);
         cfg->hw_info = hw_info;
+        p_hal->hw_info = hw_info;
+    }
+
+    if (cfg->hal_fbc_adj_cfg) {
+        cfg->hal_fbc_adj_cfg->func = vdpu382_afbc_align_calc;
+        cfg->hal_fbc_adj_cfg->expand = 0;
     }
 
     return ret;
@@ -278,55 +294,66 @@ static void vp9d_refine_rcb_size(Vdpu382RcbInfo *rcb_info,
 {
     RK_U32 rcb_bits = 0;
     DXVA_PicParams_VP9 *pic_param = (DXVA_PicParams_VP9*)data;
-    RK_U32 num_tiles = pic_param->log2_tile_rows;
+    RK_U32 num_tiles_col = 1 << pic_param->log2_tile_cols;
     RK_U32 bit_depth = pic_param->BitDepthMinus8Luma + 8;
-    RK_U32 ext_align_size = num_tiles * 64 * 8;
+    RK_U32 ext_align_size = num_tiles_col * 64 * 8;
 
     width = MPP_ALIGN(width, VP9_CTU_SIZE);
     height = MPP_ALIGN(height, VP9_CTU_SIZE);
     /* RCB_STRMD_ROW */
-    if (width > 4096)
+    if (width >= 4096)
         rcb_bits = MPP_ALIGN(width, 64) * 232 + ext_align_size;
     else
         rcb_bits = 0;
     rcb_info[RCB_STRMD_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_TRANSD_ROW */
-    if (width > 8192)
+    if (width >= 8192)
         rcb_bits = (MPP_ALIGN(width - 8192, 4) << 1) + ext_align_size;
     else
         rcb_bits = 0;
     rcb_info[RCB_TRANSD_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_TRANSD_COL */
-    if (height > 8192)
-        rcb_bits = (MPP_ALIGN(height - 8192, 4) << 1) + ext_align_size;
+    if ((height >= 8192) && (num_tiles_col > 1))
+        rcb_bits = (MPP_ALIGN(height - 8192, 4) << 1);
     else
         rcb_bits = 0;
     rcb_info[RCB_TRANSD_COL].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_INTER_ROW */
     rcb_bits = width * 36 + ext_align_size;
     rcb_info[RCB_INTER_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_INTER_COL */
     rcb_info[RCB_INTER_COL].size = 0;
+
     /* RCB_INTRA_ROW */
-    rcb_bits = width * 48 + ext_align_size;
+    rcb_bits = width * 2 * 11 + ext_align_size;
     rcb_info[RCB_INTRA_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_DBLK_ROW */
-    rcb_bits = width * (1 + 16 * bit_depth) + num_tiles * 192 * bit_depth + ext_align_size;
+    rcb_bits = width * (0.5 + 16 * bit_depth) + num_tiles_col * 192 * bit_depth + ext_align_size;
     rcb_info[RCB_DBLK_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_SAO_ROW */
     rcb_info[RCB_SAO_ROW].size = 0;
+
     /* RCB_FBC_ROW */
     if (vp9_hw_regs->common.reg012.fbc_e) {
         rcb_bits = 8 * width * bit_depth + ext_align_size;
     } else
         rcb_bits = 0;
     rcb_info[RCB_FBC_ROW].size = MPP_RCB_BYTES(rcb_bits);
+
     /* RCB_FILT_COL */
-    if (vp9_hw_regs->common.reg012.fbc_e) {
-        rcb_bits = height * (4 + 24 *  bit_depth);
+    if (num_tiles_col > 1) {
+        if (vp9_hw_regs->common.reg012.fbc_e) {
+            rcb_bits = height * (4 + 24 *  bit_depth);
+        } else
+            rcb_bits = height * (4 + 16 *  bit_depth);
     } else
-        rcb_bits = height * (4 + 16 *  bit_depth);
-    rcb_bits += ext_align_size;
+        rcb_bits = 0;
     rcb_info[RCB_FILT_COL].size = MPP_RCB_BYTES(rcb_bits);
 }
 
@@ -394,6 +421,7 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     RK_U32 sw_uv_hor_virstride;
     RK_U32 sw_y_virstride;
     RK_U8  ref_idx = 0;
+    RK_U8  ref_frame_idx = 0;
     RK_U32 *reg_ref_base = 0;
     RK_S32 intraFlag = 0;
     MppBuffer framebuf = NULL;
@@ -447,8 +475,11 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     memset(hw_ctx->hw_regs, 0, sizeof(Vdpu382Vp9dRegSet));
 #if HW_PROB
     hal_vp9d_prob_flag_delta(mpp_buffer_get_ptr(hw_ctx->probe_base), task->dec.syntax.data);
-    if (intraFlag)
+    mpp_buffer_sync_end(hw_ctx->probe_base);
+    if (intraFlag) {
         hal_vp9d_prob_default(mpp_buffer_get_ptr(hw_ctx->prob_default_base), task->dec.syntax.data);
+        mpp_buffer_sync_end(hw_ctx->prob_default_base);
+    }
 
     /* config reg103 */
     vp9_hw_regs->vp9d_param.reg103.prob_update_en   = 1;
@@ -470,7 +501,6 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     /* set info for multi core */
     {
         MppFrame mframe = NULL;
-        RK_U8 ref_frame_idx = 0;
 
         vp9_hw_regs->common.reg028.sw_poc_arb_flag = 1;
         mpp_buf_slot_get_prop(p_hal->slots, task->dec.output, SLOT_FRAME_PTR, &mframe);
@@ -507,12 +537,26 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
         // segment id ref poc
         vp9_hw_regs->vp9d_param.reg100.segid_ref_poc = hw_ctx->segid_ref_poc;
 
+        vp9_hw_regs->vp9d_addr.reg169_segidcur_base = mpp_buffer_get_fd(hw_ctx->seg_base);
+        vp9_hw_regs->vp9d_addr.reg168_segidlast_base = mpp_buffer_get_fd(hw_ctx->seg_base);
+        if (hw_ctx->last_segid_flag) {
+            mpp_dev_set_reg_offset(p_hal->dev, 168, hw_ctx->offset_segid_last);
+            mpp_dev_set_reg_offset(p_hal->dev, 169, hw_ctx->offset_segid_cur);
+        } else {
+            mpp_dev_set_reg_offset(p_hal->dev, 168, hw_ctx->offset_segid_cur);
+            mpp_dev_set_reg_offset(p_hal->dev, 169, hw_ctx->offset_segid_last);
+        }
+
         if ((pic_param->stVP9Segments.enabled && pic_param->stVP9Segments.update_map) ||
             (hw_ctx->ls_info.last_width != pic_param->width) ||
             (hw_ctx->ls_info.last_height != pic_param->height) ||
             intraFlag || pic_param->error_resilient_mode) {
             hw_ctx->segid_ref_poc = vp9_hw_regs->vp9d_param.reg65.cur_poc;
-        }
+            hw_ctx->last_segid_flag = !hw_ctx->last_segid_flag;
+            vp9_hw_regs->vp9d_param.reg100.segid_ref_poc = 0;
+            vp9_hw_regs->vp9d_param.reg75.vp9_segment_id_update = 1;
+        } else
+            vp9_hw_regs->vp9d_param.reg75.vp9_segment_id_update = 0;
     }
 
     /* config last prob base and update write base */
@@ -571,6 +615,7 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     vp9_hw_regs->vp9d_addr.reg160_delta_prob_base = mpp_buffer_get_fd(hw_ctx->probe_base);
 #else
     hal_vp9d_output_probe(mpp_buffer_get_ptr(hw_ctx->probe_base), task->dec.syntax.data);
+    mpp_buffer_sync_end(hw_ctx->probe_base);
 #endif
     vp9_hw_regs->common.reg013.cur_pic_is_idr = !pic_param->frame_type;
     vp9_hw_regs->common.reg009.dec_mode = 2; //set as vp9 dec
@@ -596,13 +641,13 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
         fbc_en = MPP_FRAME_FMT_IS_FBC(mpp_frame_get_fmt(mframe));
 
         if (fbc_en) {
-            RK_U32 w = MPP_ALIGN(mpp_frame_get_width(mframe), 64);
+            RK_U32 fbc_hdr_stride = mpp_frame_get_fbc_hdr_stride(mframe);
             RK_U32 h = MPP_ALIGN(mpp_frame_get_height(mframe), 64);
-            RK_U32 fbd_offset = MPP_ALIGN(w * (h + 16) / 16, SZ_4K);
+            RK_U32 fbd_offset = MPP_ALIGN(fbc_hdr_stride * (h + 16) / 16, SZ_4K);
 
             vp9_hw_regs->common.reg012.fbc_e = 1;
-            vp9_hw_regs->common.reg018.y_hor_virstride = w >> 4;
-            vp9_hw_regs->common.reg019.uv_hor_virstride = w >> 4;
+            vp9_hw_regs->common.reg018.y_hor_virstride = fbc_hdr_stride >> 4;
+            vp9_hw_regs->common.reg019.uv_hor_virstride = fbc_hdr_stride >> 4;
             vp9_hw_regs->common.reg020_fbc_payload_off.payload_st_offset = fbd_offset >> 4;
         } else {
             sw_y_hor_virstride = (vp9_hor_align((pic_param->width * bit_depth) >> 3) >> 4);
@@ -625,23 +670,9 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     vp9_hw_regs->common_addr.reg128_rlc_base = mpp_buffer_get_fd(streambuf);
     vp9_hw_regs->common_addr.reg129_rlcwrite_base = mpp_buffer_get_fd(streambuf);
 
-    vp9_hw_regs->vp9d_addr.reg197_cabactbl_base = mpp_buffer_get_fd(hw_ctx->probe_base);
     vp9_hw_regs->vp9d_addr.reg167_count_prob_base = mpp_buffer_get_fd(hw_ctx->probe_base);
-    vp9_hw_regs->vp9d_addr.reg169_segidcur_base = mpp_buffer_get_fd(hw_ctx->probe_base);
-    vp9_hw_regs->vp9d_addr.reg168_segidlast_base = mpp_buffer_get_fd(hw_ctx->probe_base);
     mpp_dev_set_reg_offset(p_hal->dev, 167, hw_ctx->offset_count);
 
-    if (hw_ctx->last_segid_flag) {
-        mpp_dev_set_reg_offset(p_hal->dev, 168, hw_ctx->offset_segid_last);
-        mpp_dev_set_reg_offset(p_hal->dev, 169, hw_ctx->offset_segid_cur);
-    } else {
-        mpp_dev_set_reg_offset(p_hal->dev, 168, hw_ctx->offset_segid_cur);
-        mpp_dev_set_reg_offset(p_hal->dev, 169, hw_ctx->offset_segid_last);
-    }
-
-    if (pic_param->stVP9Segments.enabled && pic_param->stVP9Segments.update_map) {
-        hw_ctx->last_segid_flag = !hw_ctx->last_segid_flag;
-    }
     //set cur colmv base
     mv_buf = hal_bufs_get_buf(hw_ctx->cmv_bufs, task->dec.output);
     vp9_hw_regs->common_addr.reg131_colmv_cur_base = mpp_buffer_get_fd(mv_buf->buf[0]);
@@ -654,17 +685,29 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     vp9_hw_regs->vp9d_param.reg64.cprheader_offset = 0;
     reg_ref_base = (RK_U32*)&vp9_hw_regs->vp9d_addr.reg164_ref_last_base;
     for (i = 0; i < 3; i++) {
+        MppFrame frame = NULL;
+
         ref_idx = pic_param->frame_refs[i].Index7Bits;
+        ref_frame_idx = pic_param->ref_frame_map[ref_idx].Index7Bits;
         ref_frame_width_y = pic_param->ref_frame_coded_width[ref_idx];
         ref_frame_height_y = pic_param->ref_frame_coded_height[ref_idx];
         pic_h[0] = vp9_ver_align(ref_frame_height_y);
         pic_h[1] = vp9_ver_align(ref_frame_height_y) / 2;
-        if (fbc_en) {
-            y_hor_virstride = uv_hor_virstride = MPP_ALIGN(ref_frame_width_y, 64) >> 4;
+
+        if (ref_frame_idx < 0x7f)
+            mpp_buf_slot_get_prop(p_hal ->slots, ref_frame_idx, SLOT_FRAME_PTR, &frame);
+
+        if (fbc_en && frame) {
+            RK_U32 fbc_hdr_stride = mpp_frame_get_fbc_hdr_stride(frame);
+            RK_U32 h = MPP_ALIGN(mpp_frame_get_height(frame), 64);
+            RK_U32 fbd_offset = MPP_ALIGN(fbc_hdr_stride * (h + 16) / 16, SZ_4K);
+
+            y_hor_virstride = uv_hor_virstride = fbc_hdr_stride >> 4;
+            y_virstride = fbd_offset;
         } else {
             y_hor_virstride = uv_hor_virstride = (vp9_hor_align((ref_frame_width_y * bit_depth) >> 3) >> 4);
+            y_virstride = y_hor_virstride * pic_h[0];
         }
-        y_virstride = y_hor_virstride * pic_h[0];
 
         if (pic_param->ref_frame_map[ref_idx].Index7Bits < 0x7f) {
             mpp_buf_slot_get_prop(p_hal ->slots, pic_param->ref_frame_map[ref_idx].Index7Bits, SLOT_BUFFER, &framebuf);
@@ -759,9 +802,22 @@ static MPP_RET hal_vp9d_vdpu382_gen_regs(void *hal, HalTaskInfo *task)
     vp9_hw_regs->common.reg010.dec_e            = 1;
     vp9_hw_regs->common.reg011.buf_empty_en     = 1;
     vp9_hw_regs->common.reg011.dec_clkgate_e    = 1;
+    vp9_hw_regs->common.reg011.err_head_fill_e  = 1;
+    vp9_hw_regs->common.reg011.err_colmv_fill_e = 1;
 
-    vp9_hw_regs->common.reg026.swreg_block_gating_e = 0xfffff;
+    vp9_hw_regs->common.reg026.inter_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.filterd_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.strmd_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.mcp_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.busifd_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.dec_ctrl_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.intra_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.mc_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.transd_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.sram_auto_gating_e = 1;
+    vp9_hw_regs->common.reg026.cru_auto_gating_e = 1;
     vp9_hw_regs->common.reg026.reg_cfg_gating_en = 1;
+
     vp9_hw_regs->common.reg032_timeout_threshold = 0x3ffff;
 
     //last info  update
@@ -940,24 +996,7 @@ static MPP_RET hal_vp9d_vdpu382_start(void *hal, HalTaskInfo *task)
             break;
         }
         /* rcb info for sram */
-        {
-            RK_U32 i = 0;
-            MppDevRcbInfoCfg rcb_cfg;
-            Vdpu382RcbInfo  rcb_info[RCB_BUF_COUNT];
-
-            memcpy(rcb_info, hw_ctx->rcb_info, sizeof(rcb_info));
-            qsort(rcb_info, MPP_ARRAY_ELEMS(rcb_info),
-                  sizeof(rcb_info[0]), vdpu382_compare_rcb_size);
-
-            for (i = 0; i < MPP_ARRAY_ELEMS(rcb_info); i++) {
-                rcb_cfg.reg_idx = rcb_info[i].reg;
-                rcb_cfg.size = rcb_info[i].size;
-                if (rcb_cfg.size > 0) {
-                    mpp_dev_ioctl(dev, MPP_DEV_RCB_INFO, &rcb_cfg);
-                } else
-                    break;
-            }
-        }
+        vdpu382_set_rcbinfo(dev, hw_ctx->rcb_info);
         ret = mpp_dev_ioctl(dev, MPP_DEV_CMD_SEND, NULL);
         if (ret) {
             mpp_err_f("send cmd failed %d\n", ret);
@@ -1003,6 +1042,8 @@ static MPP_RET hal_vp9d_vdpu382_wait(void *hal, HalTaskInfo *task)
 #if !HW_PROB
     if (p_hal->dec_cb && task->dec.flags.wait_done) {
         DXVA_PicParams_VP9 *pic_param = (DXVA_PicParams_VP9*)task->dec.syntax.data;
+
+        mpp_buffer_sync_end(hw_ctx->count_base);
         hal_vp9d_update_counts(mpp_buffer_get_ptr(hw_ctx->count_base), task->dec.syntax.data);
         mpp_callback(p_hal->dec_cb, &pic_param->counts);
     }

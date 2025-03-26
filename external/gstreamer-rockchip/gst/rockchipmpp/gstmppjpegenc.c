@@ -40,40 +40,44 @@ struct _GstMppJpegEnc
 {
   GstMppEnc parent;
 
-  guint quant;
+  guint q_factor;
+  guint qf_min;
+  guint qf_max;
 };
 
 #define parent_class gst_mpp_jpeg_enc_parent_class
 G_DEFINE_TYPE (GstMppJpegEnc, gst_mpp_jpeg_enc, GST_TYPE_MPP_ENC);
 
-#define DEFAULT_PROP_QUANT 10
+#define DEFAULT_PROP_Q_FACTOR 80
+#define DEFAULT_PROP_QF_MIN 1
+#define DEFAULT_PROP_QF_MAX 99
 
 enum
 {
   PROP_0,
-  PROP_QUANT,
+  PROP_Q_FACTOR,
+  PROP_QF_MIN,
+  PROP_QF_MAX,
   PROP_LAST,
 };
+
+#define GST_MPP_JPEG_ENC_SIZE_CAPS \
+    "width  = (int) [ 16, MAX ], height = (int) [ 16, MAX ]"
 
 static GstStaticPadTemplate gst_mpp_jpeg_enc_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("image/jpeg, "
-        "width  = (int) [ 16, 8192 ], "
-        "height = (int) [ 16, 8192 ], "
-        "framerate = " GST_VIDEO_FPS_RANGE ", " "sof-marker = { 0 }")
-    );
+        GST_MPP_JPEG_ENC_SIZE_CAPS "," "sof-marker = { 0 }"));
 
 static GstStaticPadTemplate gst_mpp_jpeg_enc_sink_template =
-    GST_STATIC_PAD_TEMPLATE ("sink",
+GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw,"
         "format = (string) { " MPP_ENC_FORMATS " }, "
-        "width  = (int) [ 16, 8192 ], "
-        "height = (int) [ 16, 8192 ], "
-        "framerate = " GST_VIDEO_FPS_RANGE ";"));
+        GST_MPP_JPEG_ENC_SIZE_CAPS));
 
 static void
 gst_mpp_h264_enc_set_property (GObject * object,
@@ -84,12 +88,28 @@ gst_mpp_h264_enc_set_property (GObject * object,
   GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
   switch (prop_id) {
-    case PROP_QUANT:{
-      guint quant = g_value_get_uint (value);
-      if (self->quant == quant)
+    case PROP_Q_FACTOR:{
+      guint q_factor = g_value_get_uint (value);
+      if (self->q_factor == q_factor)
         return;
 
-      self->quant = quant;
+      self->q_factor = q_factor;
+      break;
+    }
+    case PROP_QF_MIN:{
+      guint qf_min = g_value_get_uint (value);
+      if (self->qf_min == qf_min)
+        return;
+
+      self->qf_min = qf_min;
+      break;
+    }
+    case PROP_QF_MAX:{
+      guint qf_max = g_value_get_uint (value);
+      if (self->qf_max == qf_max)
+        return;
+
+      self->qf_max = qf_max;
       break;
     }
     default:
@@ -108,8 +128,14 @@ gst_mpp_h264_enc_get_property (GObject * object,
   GstMppJpegEnc *self = GST_MPP_JPEG_ENC (encoder);
 
   switch (prop_id) {
-    case PROP_QUANT:
-      g_value_set_uint (value, self->quant);
+    case PROP_Q_FACTOR:
+      g_value_set_uint (value, self->q_factor);
+      break;
+    case PROP_QF_MIN:
+      g_value_set_uint (value, self->qf_min);
+      break;
+    case PROP_QF_MAX:
+      g_value_set_uint (value, self->qf_max);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -123,10 +149,12 @@ gst_mpp_jpeg_enc_apply_properties (GstVideoEncoder * encoder)
   GstMppJpegEnc *self = GST_MPP_JPEG_ENC (encoder);
   GstMppEnc *mppenc = GST_MPP_ENC (encoder);
 
-  if (!mppenc->prop_dirty)
+  if (G_LIKELY (!mppenc->prop_dirty))
     return TRUE;
 
-  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "jpeg:quant", self->quant);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "jpeg:q_factor", self->q_factor);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "jpeg:qf_min", self->qf_min);
+  mpp_enc_cfg_set_s32 (mppenc->mpp_cfg, "jpeg:qf_max", self->qf_max);
 
   return gst_mpp_enc_apply_properties (encoder);
 }
@@ -167,7 +195,9 @@ gst_mpp_jpeg_enc_init (GstMppJpegEnc * self)
 {
   self->parent.mpp_type = MPP_VIDEO_CodingMJPEG;
 
-  self->quant = DEFAULT_PROP_QUANT;
+  self->q_factor = DEFAULT_PROP_Q_FACTOR;
+  self->qf_min = DEFAULT_PROP_QF_MIN;
+  self->qf_max = DEFAULT_PROP_QF_MAX;
 }
 
 static void
@@ -189,9 +219,19 @@ gst_mpp_jpeg_enc_class_init (GstMppJpegEncClass * klass)
   gobject_class->get_property =
       GST_DEBUG_FUNCPTR (gst_mpp_h264_enc_get_property);
 
-  g_object_class_install_property (gobject_class, PROP_QUANT,
-      g_param_spec_uint ("quant", "Quant",
-          "JPEG Quantization", 0, 10, DEFAULT_PROP_QUANT,
+  g_object_class_install_property (gobject_class, PROP_Q_FACTOR,
+      g_param_spec_uint ("q-factor", "Quality Factor",
+          "Quality Factor", 1, 99, DEFAULT_PROP_Q_FACTOR,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_QF_MIN,
+      g_param_spec_int ("qf-min", "Min Quality fator",
+          "Min Quality Factor", 1, 99, DEFAULT_PROP_QF_MIN,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_QF_MAX,
+      g_param_spec_int ("qf-max", "Max Quality fator",
+          "Max Quality Factor", 1, 99, DEFAULT_PROP_QF_MAX,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_add_pad_template (element_class,
@@ -205,4 +245,14 @@ gst_mpp_jpeg_enc_class_init (GstMppJpegEncClass * klass)
       "Encode video streams via Rockchip Mpp",
       "Randy Li <randy.li@rock-chips.com>, "
       "Jeffy Chen <jeffy.chen@rock-chips.com>");
+}
+
+gboolean
+gst_mpp_jpeg_enc_register (GstPlugin * plugin, guint rank)
+{
+  if (!gst_mpp_enc_supported (MPP_VIDEO_CodingMJPEG))
+    return FALSE;
+
+  return gst_element_register (plugin, "mppjpegenc", rank,
+      gst_mpp_jpeg_enc_get_type ());
 }

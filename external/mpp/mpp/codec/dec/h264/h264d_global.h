@@ -19,6 +19,7 @@
 #define __H264D_GLOBAL_H__
 
 #include <stdio.h>
+#include "h2645d_sei.h"
 #include "rk_type.h"
 
 #include "mpp_debug.h"
@@ -52,36 +53,36 @@
 #define H264D_DBG_FIELD_PAIRED      (0x00020000)
 #define H264D_DBG_DISCONTINUOUS     (0x00040000)
 
-extern RK_U32 rkv_h264d_parse_debug;
+extern RK_U32 h264d_debug;
 
 #define H264D_DBG(level, fmt, ...)\
 do {\
-    if (level & rkv_h264d_parse_debug)\
+    if (level & h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
 
 #define H264D_ERR(fmt, ...)\
 do {\
-    if (H264D_DBG_ERROR & rkv_h264d_parse_debug)\
+    if (H264D_DBG_ERROR & h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
 #define ASSERT(val)\
 do {\
-    if (H264D_DBG_ASSERT & rkv_h264d_parse_debug)\
+    if (H264D_DBG_ASSERT & h264d_debug)\
         { mpp_assert(val); }\
 } while (0)
 
 #define H264D_WARNNING(fmt, ...)\
 do {\
-    if (H264D_DBG_WARNNING & rkv_h264d_parse_debug)\
+    if (H264D_DBG_WARNNING & h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
 #define H264D_LOG(fmt, ...)\
 do {\
-    if (H264D_DBG_LOG & rkv_h264d_parse_debug)\
+    if (H264D_DBG_LOG & h264d_debug)\
         { mpp_log(fmt, ## __VA_ARGS__); }\
 } while (0)
 
@@ -265,8 +266,6 @@ typedef struct h264_dpb_mark_t {
     RK_U8    mark_idx;
     MppFrame mframe;
     RK_S32   slot_idx;
-    RK_S32   poc;
-    RK_S64   pts;
     struct h264_store_pic_t *pic;
 } H264_DpbMark_t;
 
@@ -389,6 +388,7 @@ typedef struct h264_frame_store_t {
 typedef struct h264_dpb_buf_t {
     RK_U32   size;
     RK_U32   used_size;
+    RK_U32   allocated_size;
     RK_U32   ref_frames_in_buffer;
     RK_U32   ltref_frames_in_buffer;
     RK_U32   used_size_il;
@@ -523,7 +523,7 @@ typedef struct h264_sps_t {
     RK_S32    constrained_set5_flag;                             // u(2)
 
     RK_S32    level_idc;                                         // u(8)
-    RK_S32    seq_parameter_set_id;                              // ue(v)
+    RK_U32    seq_parameter_set_id;                              // ue(v)
     RK_S32    chroma_format_idc;                                 // ue(v)
 
     RK_S32    seq_scaling_matrix_present_flag;                   // u(1)
@@ -603,8 +603,8 @@ typedef struct h264_subsps_t {
 
 typedef struct h264_pps_t {
     RK_S32   Valid;                  // indicates the parameter set is valid
-    RK_S32   pic_parameter_set_id;                             // ue(v)
-    RK_S32   seq_parameter_set_id;                             // ue(v)
+    RK_U32   pic_parameter_set_id;                             // ue(v)
+    RK_U32   seq_parameter_set_id;                             // ue(v)
     RK_S32   entropy_coding_mode_flag;                            // u(1)
     RK_S32   transform_8x8_mode_flag;                             // u(1)
 
@@ -741,11 +741,10 @@ typedef struct h264_sei_t {
         //-- for adding
     } scalable_nesting;
 
-    RK_U32 user_data_DivX_flag;
     // Placeholder; in future more supported types will contribute to more
     //---- follow is used in other parts
     RK_S32 mvc_scalable_nesting_flag;
-    RK_S32  seq_parameter_set_id;
+    RK_U32 seq_parameter_set_id;
 
     H264_SEI_PIC_TIMING_t pic_timing;
 
@@ -763,7 +762,7 @@ typedef struct h264_slice_t {
     RK_S32       nal_reference_idc;            //!< nal_reference_idc from NAL unit
     RK_U32       start_mb_nr;                  //!< MUST be set by NAL even in case of ei_flag == 1
     RK_S32       slice_type;                   //!< slice type
-    RK_S32       pic_parameter_set_id;
+    RK_U32       pic_parameter_set_id;
     RK_S32       colour_plane_id;
     RK_S32       frame_num;
     RK_S32       field_pic_flag;
@@ -848,7 +847,7 @@ typedef struct h264_old_slice_par_t {
     RK_U8   bottom_field_flag;
     RK_U8   idr_flag;
     RK_S32  idr_pic_id;
-    RK_S32  pps_id;
+    RK_U32  pps_id;
     RK_S32  view_id;
     RK_S32  inter_view_flag;
     RK_S32  anchor_pic_flag;
@@ -892,7 +891,7 @@ typedef struct h264d_input_ctx_t {
     RK_S64 in_pts;
     RK_S64 in_dts;
     RK_U8  has_get_eos;
-    RK_U32 mvc_disable;
+    RK_U32 max_buf_size;
     //!< output data
     RK_U8  task_valid;
     RK_U32 task_eos;
@@ -918,17 +917,22 @@ typedef struct h264d_input_ctx_t {
 
 //!< current stream
 typedef struct h264d_curstrm_t {
-    RK_U32    nalu_offset;     //!< The offset of the input stream
-    RK_U32    nalu_max_size;   //!< Cur Unit Buffer size
+    RK_U32    nalu_offset;       //!< The offset of the input stream
+    RK_U32    nalu_max_size;     //!< Cur Unit Buffer size
     RK_U8     *curdata;
 
     RK_S32    nalu_type;
     RK_U32    nalu_len;
-    RK_U8     *nalu_buf;       //!< store read nalu data
+    RK_U8     *nalu_buf;         //!< store read nalu data
 
     RK_U32    head_offset;
     RK_U32    head_max_size;
-    RK_U8     *head_buf;       //!< store header data, sps/pps/slice header
+    RK_U8     *head_buf;         //!< store header data, sps/pps/slice header
+
+    RK_U32    first_mb_in_slice; //!< mark current slice
+    RK_U32    tmp_offset;
+    RK_U32    tmp_max_size;
+    RK_U8     *tmp_buf;          //!< store temporary header data
 
     RK_U32    prefixdata;
     RK_U8     startcode_found;
@@ -1004,7 +1008,7 @@ typedef struct h264d_video_ctx_t {
     RK_S32     no_output_of_prior_pics_flag;
     RK_S32     last_has_mmco_5;
     RK_S32     max_frame_num;
-    RK_S32     active_sps_id[MAX_NUM_DPB_LAYERS];
+    RK_U32     active_sps_id[MAX_NUM_DPB_LAYERS];
     RK_U32     PicWidthInMbs;
     RK_U32     FrameHeightInMbs;
     RK_S32     frame_mbs_only_flag;
@@ -1023,8 +1027,8 @@ typedef struct h264d_video_ctx_t {
     RK_S32     last_pic_height_in_map_units_minus1[2];
     RK_S32     last_profile_idc[2];
     RK_S32     last_level_idc[2];
-    RK_S32     last_sps_id;
-    RK_S32     last_pps_id;
+    RK_U32     last_sps_id;
+    RK_U32     last_pps_id;
     RK_S32     PrevPicOrderCntMsb;
     RK_S32     PrevPicOrderCntLsb;
     RK_U32     PreviousFrameNum;
@@ -1047,6 +1051,12 @@ typedef struct h264d_video_ctx_t {
     MppMemPool pic_st;
     //!< spspps data update
     RK_U32     spspps_update;
+
+    RK_U32     dpb_fast_out;
+    RK_U32     dpb_first_fast_played;
+    RK_U32     last_ref_frame_num;
+    RK_U32     deny_flag;
+    RecoveryPoint recovery;
 } H264dVideoCtx_t;
 
 typedef struct h264d_mem_t {
@@ -1107,6 +1117,7 @@ typedef struct h264_err_ctx_t {
 
     RK_U32    i_slice_no;
     RK_S32    first_iframe_poc;
+    RK_S32    first_iframe_is_output;
 } H264dErrCtx_t;
 //!< decoder video parameter
 typedef struct h264_dec_ctx_t {

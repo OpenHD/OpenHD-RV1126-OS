@@ -236,6 +236,9 @@ typedef enum MppEncRcCfgChange_e {
     MPP_ENC_RC_CFG_CHANGE_DEBREATH      = (1 << 24),
     MPP_ENC_RC_CFG_CHANGE_HIER_QP       = (1 << 25),
     MPP_ENC_RC_CFG_CHANGE_ST_TIME       = (1 << 26),
+    MPP_ENC_RC_CFG_CHANGE_REFRESH       = (1 << 27),
+    MPP_ENC_RC_CFG_CHANGE_GOP_REF_CFG   = (1 << 28),
+    MPP_ENC_RC_CFG_CHANGE_FQP           = (1 << 29),
     MPP_ENC_RC_CFG_CHANGE_ALL           = (0xFFFFFFFF),
 } MppEncRcCfgChange;
 
@@ -338,6 +341,7 @@ typedef struct MppEncRcCfg_t {
      * etc...
      */
     RK_S32  gop;
+    void    *ref_cfg;
 
     /*
      * skip_cnt - max continuous frame skip count
@@ -402,10 +406,19 @@ typedef struct MppEncRcCfg_t {
     RK_S32                  qp_max_step;                /* delta qp between each two P frame */
     RK_S32                  qp_delta_ip;                /* delta qp between I and P */
     RK_S32                  qp_delta_vi;                /* delta qp between vi and P */
+    RK_S32                  fqp_min_i;
+    RK_S32                  fqp_min_p;
+    RK_S32                  fqp_max_i;
+    RK_S32                  fqp_max_p;
 
     RK_S32                  hier_qp_en;
     RK_S32                  hier_qp_delta[4];
     RK_S32                  hier_frame_num[4];
+
+    RK_U32                  refresh_en;
+    MppEncRcRefreshMode     refresh_mode;
+    RK_U32                  refresh_num;
+    RK_S32                  refresh_length;
 } MppEncRcCfg;
 
 
@@ -420,6 +433,9 @@ typedef enum MppEncHwCfgChange_e {
     MPP_ENC_HW_CFG_CHANGE_MB_RC         = (1 << 6),
     MPP_ENC_HW_CFG_CHANGE_CU_MODE_BIAS  = (1 << 8),
     MPP_ENC_HW_CFG_CHANGE_CU_SKIP_BIAS  = (1 << 9),
+    MPP_ENC_HW_CFG_CHANGE_QBIAS_I       = (1 << 10),
+    MPP_ENC_HW_CFG_CHANGE_QBIAS_P       = (1 << 11),
+    MPP_ENC_HW_CFG_CHANGE_QBIAS_EN      = (1 << 12),
     MPP_ENC_HW_CFG_CHANGE_ALL           = (0xFFFFFFFF),
 } MppEncHwCfgChange;
 
@@ -435,6 +451,9 @@ typedef struct MppEncHwCfg_t {
     /* vepu541/vepu540 */
     RK_S32                  qp_delta_row;               /* delta qp between two row in P frame */
     RK_S32                  qp_delta_row_i;             /* delta qp between two row in I frame */
+    RK_S32                  qbias_i;
+    RK_S32                  qbias_p;
+    RK_S32                  qbias_en;
     RK_U32                  aq_thrd_i[16];
     RK_U32                  aq_thrd_p[16];
     RK_S32                  aq_step_i[16];
@@ -684,6 +703,20 @@ typedef enum MppEncH264CfgChange_e {
     MPP_ENC_H264_CFG_CHANGE_ALL             = (0xFFFFFFFF),
 } MppEncH264CfgChange;
 
+/* default H.264 hardware config */
+typedef struct MppEncH264HwCfg_t {
+    /*
+     * VEPU 1/2 : 2
+     * others   : 0
+     */
+    RK_U32 hw_poc_type;
+    /*
+     * VEPU 1/2 : fixed to 12
+     * others   : changeable, default 12
+     */
+    RK_U32 hw_log2_max_frame_num_minus4;
+} MppEncH264HwCfg;
+
 typedef struct MppEncH264Cfg_t {
     RK_U32              change;
 
@@ -703,10 +736,11 @@ typedef struct MppEncH264Cfg_t {
      * log2_max_frame_num   - used in sps
      */
     RK_U32              poc_type;
-    RK_U32              hw_poc_type;
     RK_U32              log2_max_poc_lsb;
-    RK_U32              log2_max_frame_num;
+    RK_U32              log2_max_frame_num; /* actually log2_max_frame_num_minus4 */
     RK_U32              gaps_not_allowed;
+
+    MppEncH264HwCfg     hw_cfg;
 
     /*
      * H.264 profile_idc parameter
@@ -733,7 +767,9 @@ typedef struct MppEncH264Cfg_t {
      * When CABAC is select cabac_init_idc can be range 0~2
      */
     RK_S32              entropy_coding_mode;
+    RK_S32              entropy_coding_mode_ex;
     RK_S32              cabac_init_idc;
+    RK_S32              cabac_init_idc_ex;
 
     /*
      * 8x8 intra prediction and 8x8 transform enable flag
@@ -742,6 +778,7 @@ typedef struct MppEncH264Cfg_t {
      * 1 : enable  (HP)
      */
     RK_S32              transform8x8_mode;
+    RK_S32              transform8x8_mode_ex;
 
     /*
      * 0 : disable

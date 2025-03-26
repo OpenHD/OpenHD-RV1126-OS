@@ -440,7 +440,7 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
                      * field mode can not use FBC, but VOP only support fbc fmt for 10bit source.
                      * Generally, there is no 10bit field source.
                      */
-                    if (!p_Vid->frame_mbs_only_flag)
+                    if (!p_Vid->frame_mbs_only_flag && p_Vid->bit_depth_luma < 10)
                         break;
 
                     /*
@@ -465,6 +465,12 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
             impl->hor_stride = hor_stride;
             impl->ver_stride = ver_stride;
 
+            /* After cropped */
+            impl->width = p_Vid->width_after_crop;
+            impl->height = p_Vid->height_after_crop;
+            impl->pts = p_Vid->p_Cur->last_pts;
+            impl->dts = p_Vid->p_Cur->last_dts;
+
             if (MPP_FRAME_FMT_IS_FBC(out_fmt)) {
                 impl->offset_x = 0;
                 impl->offset_y = 4;
@@ -473,13 +479,10 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
                     impl->ver_stride += 16;
 
                 impl->fbc_hdr_stride =  MPP_ALIGN(impl->width, 64);
+                if (*compat_ext_fbc_hdr_256_odd)
+                    impl->fbc_hdr_stride =  MPP_ALIGN(impl->width, 256) | 256;
             }
 
-            /* After cropped */
-            impl->width = p_Vid->width_after_crop;
-            impl->height = p_Vid->height_after_crop;
-            impl->pts = p_Vid->p_Cur->last_pts;
-            impl->dts = p_Vid->p_Cur->last_dts;
             /* Setting the interlace mode for the picture */
             switch (structure) {
             case FRAME:
@@ -545,6 +548,15 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
                     impl->colorspace = MPP_FRAME_SPC_UNSPECIFIED;
                 }
             }
+
+            impl->poc = dec_pic->poc;
+            impl->viewid = dec_pic->layer_id;
+            impl->status.is_intra = dec_pic->slice_type == H264_I_SLICE;
+            impl->status.is_idr = dec_pic->idr_flag;
+            impl->status.is_non_ref = !dec_pic->used_for_reference;
+            impl->status.is_lt_ref = dec_pic->long_term_reference_flag;
+            impl->status.is_b_frame = ((dec_pic->slice_type % 5) == H264_B_SLICE);
+
             mpp_buf_slot_set_prop(p_Dec->frame_slots, cur_mark->slot_idx, SLOT_FRAME, p_Dec->curframe);
             mpp_buf_slot_get_prop(p_Dec->frame_slots, cur_mark->slot_idx, SLOT_FRAME_PTR, &cur_mark->mframe);
         }
@@ -552,6 +564,11 @@ static MPP_RET dpb_mark_malloc(H264dVideoCtx_t *p_Vid, H264_StorePic_t *dec_pic)
         p_Vid->active_dpb_mark[layer_id] = cur_mark;
     }
     cur_mark = p_Vid->active_dpb_mark[layer_id];
+    if (cur_mark->slot_idx < 0) {
+        H264D_WARNNING("[dpb_mark_malloc] error, current mark slot idx is nagative.");
+        ret = MPP_NOK;
+        goto __FAILED;
+    }
     if (structure == FRAME || structure == TOP_FIELD) {
         cur_mark->top_used += 1;
     }
@@ -579,22 +596,31 @@ __FAILED:
 static MPP_RET check_dpb_discontinuous(H264_StorePic_t *p_last, H264_StorePic_t *dec_pic, H264_SLICE_t *currSlice)
 {
     MPP_RET ret = MPP_ERR_UNKNOW;
-#if 1
+
     if (p_last && dec_pic && (dec_pic->slice_type != H264_I_SLICE)
         && (currSlice->p_Cur->sps.gaps_in_frame_num_value_allowed_flag == 0)) {
         RK_U32 error_flag = 0;
 
-        if (dec_pic->frame_num == p_last->frame_num ||
-            dec_pic->frame_num == ((p_last->frame_num + 1) % currSlice->p_Vid->max_frame_num))
-            error_flag = 0;
-        else
-            error_flag = 1;
+        if (dec_pic->combine_flag) {
+            if (dec_pic->frame_num != p_last->frame_num)
+                error_flag = 1;
+        } else {
+            RK_U32 frame_num = currSlice->p_Vid->last_ref_frame_num;
+
+            if (dec_pic->frame_num != frame_num &&
+                dec_pic->frame_num != ((frame_num + 1) % currSlice->p_Vid->max_frame_num))
+                error_flag = 1;
+        }
+
         currSlice->p_Dec->errctx.cur_err_flag |= error_flag ? 1 : 0;
+        currSlice->p_Dec->errctx.dpb_err_flag |= error_flag ? 1 : 0;
 
         H264D_DBG(H264D_DBG_DISCONTINUOUS, "[discontinuous] last_slice=%d, cur_slice=%d, last_fnum=%d, cur_fnum=%d, last_poc=%d, cur_poc=%d",
                   p_last->slice_type, dec_pic->slice_type, p_last->frame_num, dec_pic->frame_num, p_last->poc, dec_pic->poc);
     }
-#endif
+
+    if (dec_pic->idr_flag || dec_pic->used_for_reference)
+        currSlice->p_Vid->last_ref_frame_num = dec_pic->frame_num;
     return ret = MPP_OK;
 }
 
@@ -1110,7 +1136,7 @@ static MPP_RET init_lists_p_slice_mvc(H264_SLICE_t *currSlice)
         MEM_CHECK(ret, currSlice->fs_listinterview0);
         list0idx = currSlice->listXsizeP[0];
         if (currSlice->structure == FRAME) {
-            FUN_CHECK(ret = append_interview_list(p_Vid->p_Dpb_layer[1], 0, 0,
+            FUN_CHECK(ret = append_interview_list(p_Vid->p_Dpb_layer[1], currSlice->structure, 0,
                                                   currSlice->fs_listinterview0, &currSlice->listinterviewidx0, currPOC, curr_layer_id, anchor_pic_flag));
             for (i = 0; i < (RK_U32)currSlice->listinterviewidx0; i++) {
                 currSlice->listP[0][list0idx++] = currSlice->fs_listinterview0[i]->frame;
@@ -1279,9 +1305,9 @@ static MPP_RET init_lists_b_slice_mvc(H264_SLICE_t *currSlice)
         MEM_CHECK(ret, currSlice->fs_listinterview0 && currSlice->fs_listinterview1);
         list0idx = currSlice->listXsizeB[0];
         if (currSlice->structure == FRAME) {
-            FUN_CHECK(ret = append_interview_list(p_Vid->p_Dpb_layer[1], 0, 0,
+            FUN_CHECK(ret = append_interview_list(p_Vid->p_Dpb_layer[1], currSlice->structure, 0,
                                                   currSlice->fs_listinterview0, &currSlice->listinterviewidx0, currPOC, curr_layer_id, anchor_pic_flag));
-            FUN_CHECK(ret = append_interview_list(p_Vid->p_Dpb_layer[1], 0, 1,
+            FUN_CHECK(ret = append_interview_list(p_Vid->p_Dpb_layer[1], currSlice->structure, 1,
                                                   currSlice->fs_listinterview1, &currSlice->listinterviewidx1, currPOC, curr_layer_id, anchor_pic_flag));
 
             for (i = 0; i < (RK_U32)currSlice->listinterviewidx0; i++) {
@@ -1327,12 +1353,12 @@ __FAILED:
 
 static RK_U32 get_short_term_pic(H264_SLICE_t *currSlice, RK_S32 picNum, H264_StorePic_t **find_pic)
 {
-    RK_U32 i = 0;
+    RK_S32 i = 0;
     H264_StorePic_t *ret_pic = NULL;
     H264_StorePic_t *near_pic = NULL;
     H264_DpbBuf_t *p_Dpb = currSlice->p_Dpb;
 
-    for (i = 0; i < p_Dpb->ref_frames_in_buffer; i++) {
+    for (i = p_Dpb->ref_frames_in_buffer - 1; i >= 0; i--) {
         if (currSlice->structure == FRAME) {
             if ((p_Dpb->fs_ref[i]->is_reference == 3)
                 && (!p_Dpb->fs_ref[i]->frame->is_long_term)) {
@@ -1436,7 +1462,7 @@ static RK_U32 check_ref_pic_list(H264_SLICE_t *currSlice, RK_S32 cur_list)
             if (get_short_term_pic(currSlice, picNumLX, &tmp)) { //!< find short reference
                 MppFrame mframe = NULL;
                 H264D_DBG(H264D_DBG_DPB_REF_ERR, "find short reference, slot_idx=%d.\n", tmp->mem_mark->slot_idx);
-                if (tmp && tmp->mem_mark) {
+                if (tmp && tmp->mem_mark && tmp->mem_mark->slot_idx >= 0) {
                     mpp_buf_slot_get_prop(p_Vid->p_Dec->frame_slots, tmp->mem_mark->slot_idx, SLOT_FRAME_PTR, &mframe);
                     if (mframe && !mpp_frame_get_errinfo(mframe)) {
                         error_flag = 0;
@@ -1804,6 +1830,8 @@ static MPP_RET prepare_init_ref_info(H264_SLICE_t *currSlice)
     }
     //!<------  set listB -------
     for (k = 0; k < 2; k++) {
+        RK_U32 tmp[16] = {0};
+
         min_poc =  0xFFFF;
         max_poc = -0xFFFF;
         near_dpb_idx = 0;
@@ -1831,8 +1859,10 @@ static MPP_RET prepare_init_ref_info(H264_SLICE_t *currSlice)
                 voidx = p_Dec->dpb_info[i].voidx;
                 is_used = p_Dec->dpb_info[i].is_used;
                 if (currSlice->structure == FRAME && refpic) {
-                    if (poc == MPP_MIN(TOP_POC, BOT_POC) && (layer_id == voidx))
+                    if (poc == MPP_MIN(TOP_POC, BOT_POC) && (layer_id == voidx) && !tmp[i]) {
+                        tmp[i] = 1;
                         break;
+                    }
                 } else {
                     if (is_used == 3) {
                         if ((poc == BOT_POC || poc == TOP_POC) && layer_id == voidx)
@@ -1906,7 +1936,7 @@ static MPP_RET check_refer_dpb_buf_slots(H264_SLICE_t *currSlice)
         }
     }
     //!< dpb info
-    if (rkv_h264d_parse_debug & H264D_DBG_DPB_INFO) {
+    if (h264d_debug & H264D_DBG_DPB_INFO) {
         H264D_DBG(H264D_DBG_DPB_INFO, "[DPB_INFO] cur_slot_idx=%d", p_Dec->in_task->output);
         for (i = 0; i < MAX_DPB_SIZE; i++) {
             slot_idx = p_Dec->in_task->refer[i];
@@ -1920,21 +1950,22 @@ static MPP_RET check_refer_dpb_buf_slots(H264_SLICE_t *currSlice)
         p_mark = &p_Dec->dpb_mark[i];
         if (p_mark->out_flag && (p_mark->slot_idx >= 0)) {
             dpb_used++;
-            if (rkv_h264d_parse_debug & H264D_DBG_DPB_INFO) {
+            if (h264d_debug & H264D_DBG_DPB_INFO) {
                 RK_S32 fd = 0;
                 MppFrame mframe = NULL;
                 MppBuffer mbuffer = NULL;
                 mpp_buf_slot_get_prop(p_Dec->frame_slots, p_mark->slot_idx, SLOT_FRAME_PTR, &mframe);
                 mbuffer = mframe ? mpp_frame_get_buffer(mframe) : NULL;
                 fd = mbuffer ? mpp_buffer_get_fd(mbuffer) : 0xFF;
-                H264D_DBG(H264D_DBG_DPB_INFO, "[DPB_MARK_INFO] slot_idx=%d, top_used=%d, bot_used=%d, out_flag=%d, fd=0x%02x",
-                          p_mark->slot_idx, p_mark->top_used, p_mark->bot_used, p_mark->out_flag, fd);
+                H264D_DBG(H264D_DBG_DPB_INFO, "[DPB_MARK_INFO] slot_idx=%d, top_used=%d, bot_used=%d, out_flag=%d, fd=0x%02x, poc=%d, view_id=%d",
+                          p_mark->slot_idx, p_mark->top_used, p_mark->bot_used,
+                          p_mark->out_flag, fd, p_mark->pic->poc, p_mark->pic->layer_id);
             }
         }
     }
     H264D_DBG(H264D_DBG_DPB_INFO, "[DPB_MARK_INFO] ---------- cur_slot=%d --------------------", p_Dec->in_task->output);
 
-    if (dpb_used > currSlice->p_Dpb->size + 2)  {
+    if (dpb_used > MPP_MIN(p_Dec->p_Vid->dpb_size[0] + p_Dec->p_Vid->dpb_size[1], 16) + 2)  {
         H264D_ERR("[h264d_reset_error]");
         h264d_reset((void *)p_Dec);
         return MPP_NOK;
@@ -2010,7 +2041,10 @@ MPP_RET init_picture(H264_SLICE_t *currSlice)
     H264dErrCtx_t *p_err   = &p_Dec->errctx;
 
     //!< discard stream before I_SLICE
-    p_err->i_slice_no += ((!currSlice->layer_id) && (H264_I_SLICE == currSlice->slice_type)) ? 1 : 0;
+    p_err->i_slice_no += ((!currSlice->layer_id) && (H264_I_SLICE == currSlice->slice_type ||
+                                                     (p_Vid->recovery.valid_flag && p_Vid->recovery.first_frm_valid &&
+                                                      p_Vid->recovery.first_frm_id == currSlice->frame_num))) ? 1 : 0;
+
     if (!p_err->i_slice_no) {
         H264D_WARNNING("[Discard] Discard slice before I Slice. \n");
         ret = MPP_NOK;
@@ -2020,6 +2054,7 @@ MPP_RET init_picture(H264_SLICE_t *currSlice)
     if (((p_err->i_slice_no < 2) && (!currSlice->layer_id) && (H264_I_SLICE == currSlice->slice_type)) ||
         currSlice->idr_flag) {
         p_err->first_iframe_poc = p_Vid->dec_pic->poc; //!< recoder first i frame poc
+        p_err->first_iframe_is_output = 0;
     }
     //!< idr_memory_management MVC_layer, idr_flag==1
     if (currSlice->layer_id && !currSlice->svc_extension_flag && !currSlice->mvcExt.non_idr_flag) {

@@ -26,7 +26,12 @@
 #include "m2vd_parser.h"
 #include "m2vd_codec.h"
 
-#define VPU_BITSTREAM_START_CODE (0x42564b52)  /* RKVB, rockchip video bitstream */
+#define VPU_BITSTREAM_START_CODE    (0x42564b52)  /* RKVB, rockchip video bitstream */
+
+/* ignore unofficial frame poriod */
+#define MIN_FRAME_PERIOD_27M        449000  /* more than 60 fps a little*/
+#define MAX_FRAME_PERIOD_27M        1130000  /* less than 23.976 fps a little */
+#define MAX_FRAME_PERIOD_DIFF       13500   /* 500us */
 
 RK_U32 m2vd_debug = 0x0;
 
@@ -65,21 +70,22 @@ static RK_U8 intraDefaultQMatrix[64] = {
     27, 29, 35, 38, 46, 56, 69, 83
 };
 
-static int frame_period_Table[16] = {
+static int frame_period_Table_27M[16] = {
     1,
-    11142,
-    10667,
-    10240,
-    8542,
-    8533,
-    5120,
-    4271,
-    4267,
-    1,
-    1,
-    1,
-    1,
-    1,
+    1126125, /* 23.976 fps */
+    1125000, /* 24 fps */
+    1080000, /* 25 fps */
+    900900,  /* 29.97 fps */
+    900000,  /* 30 fps */
+    540000,  /* 50 fps */
+    450450,  /* 59.94 fps */
+    450000,  /* 60 fps */
+    1800000,  /* unofficial: xing 15 fps */
+    /* unofficial: libmpeg3 "Unofficial economy rates" 5/10/12/15 fps */
+    5400000,
+    2700000,
+    2250000,
+    1800000,
     1,
     1
 };
@@ -193,7 +199,7 @@ static MPP_RET m2vd_parser_init_ctx(M2VDParserContext *ctx, ParserCfg *cfg)
     ctx->pic_code_ext_head.frame_pred_frame_dct = 1;
     ctx->seq_ext_head.chroma_format = 1;
     ctx->seq_disp_ext_head.matrix_coefficients = 5;
-    ctx->PreGetFrameTime = 0;
+    ctx->pre_pts_27M = 0;
     ctx->maxFrame_inGOP = 0;
     ctx->preframe_period = 0;
     ctx->mHeaderDecFlag = 0;
@@ -945,7 +951,8 @@ static int m2vd_decode_gop_header(M2VDParserContext *ctx)
 
 static int m2vd_decode_seq_header(M2VDParserContext *ctx)
 {
-    RK_U32  i;
+    RK_U32 i;
+    RK_S32 pre_frame_rate_code = ctx->seq_head.frame_rate_code;
     BitReadCtx_t *bx = ctx->bitread_ctx;
     ctx->seq_head.decode_width = m2vd_read_bits(bx, 12);
     ctx->seq_head.decode_height = m2vd_read_bits(bx, 12);
@@ -953,8 +960,8 @@ static int m2vd_decode_seq_header(M2VDParserContext *ctx)
     ctx->display_height = ctx->seq_head.decode_height;
     ctx->seq_head.aspect_ratio_information = m2vd_read_bits(bx, 4);
     ctx->seq_head.frame_rate_code = m2vd_read_bits(bx, 4);
-    if (!ctx->frame_period)
-        ctx->frame_period = frame_period_Table[ctx->seq_head.frame_rate_code];
+    if (!ctx->frame_period || pre_frame_rate_code != ctx->seq_head.frame_rate_code)
+        ctx->frame_period = frame_period_Table_27M[ctx->seq_head.frame_rate_code];
     ctx->seq_head.bit_rate_value = m2vd_read_bits(bx, 18);
     mpp_skip_bits(bx, 1);
     ctx->seq_head.vbv_buffer_size = m2vd_read_bits(bx, 10);
@@ -972,13 +979,10 @@ static int m2vd_decode_seq_header(M2VDParserContext *ctx)
     if (ctx->seq_head.load_non_intra_quantizer_matrix) {
         for (i = 0; i < 64; i++)
             ctx->seq_head.pInter_table[scanOrder[0][i]] = (unsigned char)m2vd_read_bits(bx, 8);
-
     } else {
         for (i = 0; i < 64; i++)
             ctx->seq_head.pInter_table[i] = 16;
-
     }
-
 
     return m2vd_decode_ext_header(ctx);
 }
@@ -1113,7 +1117,7 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
 {
     M2VDHeadPic *pic_head = &ctx->pic_head;
     M2VDHeadPicCodeExt *pic_code_ext_head = &ctx->pic_code_ext_head;
-    double pts = (double)ctx->pts / 1000;
+    RK_U64 pts_27M = ctx->pts;
 
     if (ctx->resetFlag && pic_head->picture_coding_type != M2VD_CODING_TYPE_I) {
         mpp_log("[m2v]: resetFlag[%d] && picture_coding_type[%d] != I_TYPE", ctx->resetFlag, pic_head->picture_coding_type);
@@ -1131,8 +1135,14 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
     if ((pic_code_ext_head->picture_structure == M2VD_PIC_STRUCT_FRAME ) ||
         ((pic_code_ext_head->picture_structure == M2VD_PIC_STRUCT_TOP_FIELD) && pic_code_ext_head->top_field_first) ||
         ((pic_code_ext_head->picture_structure == M2VD_PIC_STRUCT_BOTTOM_FIELD) && (!pic_code_ext_head->top_field_first))) {
-        double frm_pts = 0;
+        RK_S64 frm_pts = 0;
         RK_U32 frametype = 0;
+
+        if (ctx->pts_is_90K) {
+            pts_27M = ctx->pts * 300;
+        } else {
+            pts_27M = ctx->pts * 27;
+        }
 
         if (ctx->frame_cur->slot_index >= 0) {
             MppFrame frame = NULL;
@@ -1149,50 +1159,68 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
             m2v_update_ref_frame(ctx, 1);
         }
 
-        if (ctx->PreGetFrameTime != pts) {
-            double tmp_frame_period;
+        if (ctx->pre_pts_27M != pts_27M) {
+            RK_S64 tmp_frame_period;
 
-            if (ctx->GroupFrameCnt) {
-                ctx->GroupFrameCnt = ctx->GroupFrameCnt + pic_head->temporal_reference;
-            } else if (pic_head->temporal_reference == (RK_S32)ctx->PreChangeTime_index)
-                ctx->GroupFrameCnt = ctx->max_temporal_reference + 1;
+            if (ctx->group_frm_cnt) {
+                ctx->group_frm_cnt = ctx->group_frm_cnt + pic_head->temporal_reference;
+            } else if (pic_head->temporal_reference == (RK_S32)ctx->prechange_temporal_ref)
+                ctx->group_frm_cnt = ctx->max_temporal_reference + 1;
             else if (pic_head->temporal_reference)
-                ctx->GroupFrameCnt = pic_head->temporal_reference - ctx->PreChangeTime_index;
+                ctx->group_frm_cnt = pic_head->temporal_reference - ctx->prechange_temporal_ref;
             else
-                ctx->GroupFrameCnt = ctx->max_temporal_reference - ctx->PreChangeTime_index + 1;
+                ctx->group_frm_cnt = ctx->max_temporal_reference - ctx->prechange_temporal_ref + 1;
 
-            tmp_frame_period = pts - ctx->PreGetFrameTime;
+            tmp_frame_period = pts_27M - ctx->pre_pts_27M;
 
-            if ((pts > ctx->PreGetFrameTime) && (pic_head->temporal_reference > (RK_S32)ctx->PreChangeTime_index)) {
-                RK_S32 theshold_frame_period = tmp_frame_period * 2 ;
+            if ((pts_27M > ctx->pre_pts_27M)
+                && (pic_head->temporal_reference > (RK_S32)ctx->prechange_temporal_ref)) {
+                RK_S32 theshold_frame_period = tmp_frame_period * 2;
                 RK_S32 last_frame_period = ctx->preframe_period ? ctx->preframe_period : ctx->frame_period;
-                RK_S32 predict_frame_period = (pic_head->temporal_reference - ctx->PreChangeTime_index) * last_frame_period / 256;
+                RK_S32 predict_frame_period =
+                    (pic_head->temporal_reference - ctx->prechange_temporal_ref) * last_frame_period;
                 if (theshold_frame_period < predict_frame_period) {
-                    pts = ctx->PreGetFrameTime + predict_frame_period;
+                    // check pts is 90KHZ raw pts
+                    RK_S64 diff_90K_frame_period = tmp_frame_period * 1000 / 90 - predict_frame_period;
+
+                    if (!ctx->pts_is_90K && llabs(diff_90K_frame_period) <= 300) {
+                        mpp_log("judge result pts is base in 90KHZ.\n");
+                        ctx->pts_is_90K = 1;
+                        // pre pts is 1MHZ, so need convert to 90KHZ
+                        pts_27M = ctx->pre_pts_27M * 1000 / 90 + predict_frame_period;
+                    } else {
+                        pts_27M = ctx->pre_pts_27M + predict_frame_period;
+                    }
                     tmp_frame_period = predict_frame_period;
                 }
             }
 
-            if ((pts > ctx->PreGetFrameTime) && (ctx->GroupFrameCnt > 0)) {
-                tmp_frame_period = (tmp_frame_period * 256) / ctx->GroupFrameCnt;
-                if ((tmp_frame_period > 4200) && (tmp_frame_period < 11200) &&
-                    (fabs(ctx->frame_period - tmp_frame_period) > 128)) {
-                    if (fabs(ctx->preframe_period - tmp_frame_period) > 128)
+            if ((pts_27M > ctx->pre_pts_27M) && (ctx->group_frm_cnt > 0)) {
+                tmp_frame_period = tmp_frame_period / ctx->group_frm_cnt;
+                // judge frame rate changed
+                if ((tmp_frame_period > MIN_FRAME_PERIOD_27M)
+                    && (tmp_frame_period < MAX_FRAME_PERIOD_27M) &&
+                    (llabs(ctx->frame_period - tmp_frame_period) > MAX_FRAME_PERIOD_DIFF)) {
+                    if (llabs(ctx->preframe_period - tmp_frame_period) > MAX_FRAME_PERIOD_DIFF) {
                         ctx->preframe_period = tmp_frame_period;
-                    else
+                    } else {
                         ctx->frame_period = tmp_frame_period;
+                        ctx->preframe_period = 0;
+                    }
+                } else {
+                    ctx->preframe_period = 0;
                 }
             }
 
-            ctx->Group_start_Time = pts - (pic_head->temporal_reference * ctx->frame_period / 256);
-            if (ctx->Group_start_Time < 0)
-                ctx->Group_start_Time = 0;
-            ctx->PreGetFrameTime = pts;
-            ctx->PreChangeTime_index = pic_head->temporal_reference;
-            ctx->GroupFrameCnt = 0;
+            ctx->group_start_time_27M = pts_27M - pic_head->temporal_reference * ctx->frame_period;
+            if (ctx->group_start_time_27M < 0)
+                ctx->group_start_time_27M = 0;
+            ctx->pre_pts_27M = pts_27M;
+            ctx->prechange_temporal_ref = pic_head->temporal_reference;
+            ctx->group_frm_cnt = 0;
         } else if ((RK_S32)ctx->pretemporal_reference > pic_head->temporal_reference + 5) {
-            ctx->Group_start_Time += ((ctx->max_temporal_reference + 1) * ctx->frame_period / 256);
-            ctx->GroupFrameCnt = ctx->max_temporal_reference - ctx->PreChangeTime_index + 1;
+            ctx->group_start_time_27M += (ctx->max_temporal_reference + 1) * ctx->frame_period;
+            ctx->group_frm_cnt = ctx->max_temporal_reference - ctx->prechange_temporal_ref + 1;
             ctx->max_temporal_reference = 0;
         }
         if ((RK_S32)ctx->pretemporal_reference > pic_head->temporal_reference + 5)
@@ -1200,17 +1228,15 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
         if (pic_head->temporal_reference > (RK_S32)ctx->max_temporal_reference)
             ctx->max_temporal_reference = pic_head->temporal_reference;
         ctx->pretemporal_reference = pic_head->temporal_reference;
-        /*if(picture_coding_type == I_TYPE)
-        {
-            if (Video_Bitsream.Slice_Time.low_part >= (RK_U32)(frame_period/128))
-                Group_start_Time = Video_Bitsream.Slice_Time.low_part - (RK_U32)(frame_period/128);
-            else
-                Group_start_Time = Video_Bitsream.Slice_Time.low_part;
-        }*/
-        frm_pts = ctx->Group_start_Time;
-        frm_pts += ((pic_head->temporal_reference * ctx->frame_period) / 256);
+        frm_pts = ctx->group_start_time_27M;
+        frm_pts += pic_head->temporal_reference * ctx->frame_period;
         if (frm_pts < 0) {
             frm_pts = 0;
+        }
+        if (ctx->pts_is_90K) {
+            frm_pts = frm_pts / 300;
+        } else {
+            frm_pts = frm_pts / 27;
         }
 
         /*
@@ -1241,7 +1267,7 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
         mpp_frame_set_hor_stride(ctx->frame_cur->f, ctx->display_width);
         mpp_frame_set_ver_stride(ctx->frame_cur->f, ctx->display_height);
         mpp_frame_set_errinfo(ctx->frame_cur->f, 0);
-        mpp_frame_set_pts(ctx->frame_cur->f, frm_pts * 1000);
+        mpp_frame_set_pts(ctx->frame_cur->f, frm_pts);
         ctx->frame_cur->flags = M2V_OUT_FLAG;
 
         if (ctx->seq_ext_head.progressive_sequence) {
@@ -1270,6 +1296,17 @@ static MPP_RET m2vd_alloc_frame(M2VDParserContext *ctx)
     } else {
         if (ctx->frame_cur->slot_index >= 0)
             mpp_buf_slot_set_flag(ctx->frame_slots, ctx->frame_cur->slot_index, SLOT_HAL_OUTPUT);
+        else {
+            /*
+             * frame alloc failed cause by stream error, such as:
+             * receive top field while top_field_first = 0,
+             * or bottom filed while top_field_first = 1;
+             * mark resetFlag to wait for another I frame
+             */
+            mpp_log("frame alloc failed, need reset\n");
+            ctx->resetFlag = 1;
+            return MPP_NOK;
+        }
     }
 
     return MPP_OK;
@@ -1442,6 +1479,11 @@ MPP_RET m2vd_parser_parse(void *ctx, HalDecTask *in_task)
                 mpp_log("[m2v]: !mHeaderDecFlag");
             goto __FAILED;
         }
+    }
+
+    if (p->seq_head.decode_width > 1920 || p->seq_head.decode_height > 1088) {
+        mpp_err("Warning: unsupport larger than 1920x1088\n");
+        goto __FAILED;
     }
 
     p->mb_width = (p->seq_head.decode_width + 15) >> 4;

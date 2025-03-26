@@ -22,7 +22,7 @@
 #include "mpp_env.h"
 #include "mpp_mem.h"
 #include "mpp_common.h"
-
+#include "mpp_time.h"
 #include "rc_debug.h"
 #include "rc_ctx.h"
 #include "rc_model_v2.h"
@@ -202,6 +202,14 @@ MPP_RET bits_model_param_init(RcModelV2Ctx *ctx)
         mpp_err("gop_bits init fail gop_len %d", gop_len);
         return MPP_ERR_MALLOC;
     }
+
+    if (ctx->usr_cfg.refresh_len) {
+        mpp_data_init_v2(&ctx->i_refresh_bit, ctx->usr_cfg.refresh_len, 0);
+        if (ctx->i_refresh_bit == NULL) {
+            mpp_err("i_refresh_bit init fail refresh_len %d", ctx->usr_cfg.refresh_len);
+            return MPP_ERR_MALLOC;
+        }
+    }
     return MPP_OK;
 }
 
@@ -210,6 +218,7 @@ void bits_frm_init(RcModelV2Ctx *ctx)
     RcCfg *usr_cfg = &ctx->usr_cfg;
     RK_U32 gop_len = usr_cfg->igop;
     RK_U32 p_bit = 0;
+    RK_U32 refresh_bit = 0;
 
     rc_dbg_func("enter %p\n", ctx);
 
@@ -225,6 +234,13 @@ void bits_frm_init(RcModelV2Ctx *ctx)
         ctx->p_sumbits = 5 * p_bit;
         mpp_data_reset_v2(ctx->i_bit, p_bit * ctx->i_scale / 16);
         ctx->i_sumbits = 2 * p_bit * ctx->i_scale / 16;
+        if (usr_cfg->refresh_len) {
+            ctx->i_refresh_scale = ctx->i_scale / usr_cfg->refresh_len  +  ctx->p_scale;
+            refresh_bit = ctx->gop_total_bits *  16 / (ctx->i_refresh_scale * usr_cfg->refresh_len
+                                                       + ctx->p_scale * (gop_len - usr_cfg->refresh_len));
+            mpp_data_reset_v2(ctx->i_refresh_bit, refresh_bit);
+            ctx->i_refresh_sumbits = usr_cfg->refresh_len * refresh_bit;
+        }
     } break;
     case SMART_P: {
         RK_U32 vi_num = 0;
@@ -329,6 +345,13 @@ MPP_RET bits_model_preset(RcModelV2Ctx *ctx, EncRcTaskInfo *info)
         /* NOTE: vi_scale may be set to zero. So we should limit the range */
         ctx->vi_scale = mpp_clip(ctx->vi_scale, 16, 320);
     } break;
+    case INTRA_RFH_FRAME: {
+        mpp_data_update_v2(ctx->i_refresh_bit, preset_bit);
+        mpp_data_update_v2(ctx->madi,  info->madi);
+        ctx->i_refresh_sumbits = mpp_data_sum_v2(ctx->i_refresh_bit);
+        ctx->i_refresh_scale = 80 * ctx->i_refresh_sumbits / (usr_cfg->refresh_len * ctx->p_sumbits);
+        ctx->i_refresh_scale = mpp_clip(ctx->i_refresh_scale, 16, 64);
+    } break;
     default : {
     } break;
     }
@@ -384,6 +407,13 @@ MPP_RET bits_model_update(RcModelV2Ctx *ctx, EncRcTaskInfo *cfg)
         /* NOTE: vi_scale may be set to zero. So we should limit the range */
         ctx->vi_scale = mpp_clip(ctx->vi_scale, 16, 320);
     } break;
+    case INTRA_RFH_FRAME: {
+        mpp_data_update_v2(ctx->i_refresh_bit, real_bit);
+        mpp_data_update_v2(ctx->madi,  madi);
+        ctx->i_refresh_sumbits = mpp_data_sum_v2(ctx->i_refresh_bit);
+        ctx->i_refresh_scale = 80 * ctx->i_refresh_sumbits / (usr_cfg->refresh_len * ctx->p_sumbits);
+        ctx->i_refresh_scale = mpp_clip(ctx->i_refresh_scale, 16, 64);
+    } break;
     default : {
     } break;
     }
@@ -426,7 +456,6 @@ MPP_RET bits_model_alloc(RcModelV2Ctx *ctx, EncRcTaskInfo *cfg, RK_S64 total_bit
                 super_bit_thr = usr_cfg->super_cfg.super_i_thd;
             }
         } break;
-
         case INTER_P_FRAME: {
             i_scale = mpp_clip(i_scale, 16, max_i_prop);
             total_bits = total_bits * 16;
@@ -462,11 +491,21 @@ MPP_RET bits_model_alloc(RcModelV2Ctx *ctx, EncRcTaskInfo *cfg, RK_S64 total_bit
             i_scale = mpp_clip(i_scale, 16, max_i_prop);
             total_bits = total_bits * 16;
         } break;
+        case INTRA_RFH_FRAME: {
+            i_scale = mpp_clip(i_scale, 16, max_i_prop);
+            total_bits = total_bits * ctx->i_refresh_scale;
+            rc_dbg_rc("ctx->i_refresh_scale = %d", ctx->i_refresh_scale);
+        } break;
         default:
             break;
         }
         if (gop_len > 1) {
-            alloc_bits = total_bits / (i_scale + 16 * (gop_len - 1));
+            if (!usr_cfg->refresh_len || cfg->frame_type == INTRA_FRAME)
+                alloc_bits = total_bits / (i_scale + 16 * (gop_len - 1));
+            else
+                alloc_bits = total_bits /
+                             (ctx->i_refresh_scale * usr_cfg->refresh_len +
+                              16 * (gop_len - usr_cfg->refresh_len));
         } else {
             alloc_bits = total_bits / i_scale;
         }
@@ -1026,7 +1065,7 @@ MPP_RET bits_model_init(RcModelV2Ctx *ctx)
     RK_S32 gop_len = ctx->usr_cfg.igop;
     RcFpsCfg *fps = &ctx->usr_cfg.fps;
     RK_S64 gop_bits = 0;
-    RK_U32 target_bps;
+    RK_U32 target_bps = 0;
 
     rc_dbg_func("enter %p\n", ctx);
 
@@ -1053,21 +1092,16 @@ MPP_RET bits_model_init(RcModelV2Ctx *ctx)
     } else {
         usr_cfg->igop = gop_len = mpp_clip(usr_cfg->igop, usr_cfg->igop, 500);
     }
-
-    if (!ctx->min_still_percent) {
-        if (usr_cfg->bps_min && usr_cfg->bps_max) {
-            ctx->min_still_percent = usr_cfg->bps_min * 100 / usr_cfg->bps_max;
-        } else {
-            ctx->min_still_percent = 25;
-        }
-        rc_dbg_rc("min_still_percent  %d", ctx->min_still_percent);
-    }
     ctx->max_still_qp = 35;
     ctx->motion_sensitivity = 90;
 
     ctx->first_frm_flg = 1;
     ctx->gop_frm_cnt = 0;
     ctx->gop_qp_sum = 0;
+
+    if (!usr_cfg->fps_chg_prop) {
+        usr_cfg->fps_chg_prop = 25;
+    }
 
     target_bps = ctx->usr_cfg.bps_max;
     ctx->re_calc_ratio = reenc_calc_vbr_ratio;
@@ -1085,6 +1119,12 @@ MPP_RET bits_model_init(RcModelV2Ctx *ctx)
     }
     case RC_AVBR: {
         ctx->calc_ratio = calc_avbr_ratio;
+        if (usr_cfg->bps_min && usr_cfg->bps_max) {
+            ctx->min_still_percent = (RK_S64)usr_cfg->bps_min * 100 / usr_cfg->bps_max;
+        } else {
+            ctx->min_still_percent = 25;
+        }
+        rc_dbg_rc("min_still_percent  %d", ctx->min_still_percent);
     } break;
     default:
         mpp_log("rc mode set error");
@@ -1103,6 +1143,7 @@ MPP_RET bits_model_init(RcModelV2Ctx *ctx)
     ctx->watl_thrd = 3 * target_bps;
     ctx->stat_watl = ctx->watl_thrd  >> 3;
     ctx->watl_base = ctx->stat_watl;
+    ctx->last_fps = fps->fps_out_num / fps->fps_out_denorm;
 
     rc_dbg_rc("gop %d total bit %lld per_frame %d statistics time %d second\n",
               ctx->usr_cfg.igop, ctx->gop_total_bits, ctx->bit_per_frame,
@@ -1111,9 +1152,67 @@ MPP_RET bits_model_init(RcModelV2Ctx *ctx)
     if (bits_model_param_init(ctx)) {
         return MPP_NOK;
     }
-
+    ctx->time_base = mpp_time();
     bits_frm_init(ctx);
     rc_dbg_func("leave %p\n", ctx);
+    return MPP_OK;
+}
+
+static MPP_RET update_mode_param(RcModelV2Ctx *ctx, RK_U32 fps)
+{
+    RcCfg *usr_cfg = &ctx->usr_cfg;
+    RK_S32 gop_len = ctx->usr_cfg.igop;
+    RK_S64 gop_bits = 0;
+    RK_U32 target_bps;
+    RK_U32  stat_len = fps * usr_cfg->stats_time;
+
+    target_bps = ctx->usr_cfg.bps_max;
+    if (ctx->usr_cfg.mode == RC_CBR) {
+        target_bps = ctx->usr_cfg.bps_target;
+    }
+
+    if (gop_len >= 1)
+        gop_bits = (RK_S64)gop_len * target_bps;
+    else
+        gop_bits = (RK_S64)target_bps;
+
+    ctx->gop_total_bits = gop_bits / fps;
+
+    ctx->bit_per_frame = target_bps / fps;
+
+    if (ctx->stat_bits != NULL) {
+        mpp_data_deinit_v2(ctx->stat_bits);
+        ctx->stat_bits = NULL;
+    }
+    mpp_data_init_v2(&ctx->stat_bits, stat_len , ctx->bit_per_frame);
+    if (ctx->stat_bits == NULL) {
+        mpp_err("stat_bits init fail stat_len %d", stat_len);
+        return MPP_ERR_MALLOC;
+    }
+    return MPP_OK;
+}
+
+static MPP_RET fps_chg_update_mode(RcModelV2Ctx *ctx)
+{
+    ctx->time_end = mpp_time();
+    ctx->frm_cnt++;
+
+    if (ctx->time_base && ctx->time_end &&
+        ((ctx->time_end - ctx->time_base) >= (RK_S64)(250 * 1000))) {
+
+        RK_S32 time_diff = ((RK_S32)(ctx->time_end - ctx->time_base) / 1000);
+        RK_U32 fps = ctx->frm_cnt * 1000 / time_diff;
+
+        if (ctx->last_fps > 0 && fps &&
+            abs(ctx->last_fps - (RK_S32)fps) * 100 / ctx->last_fps > (RK_S32)ctx->usr_cfg.fps_chg_prop) {
+            update_mode_param(ctx, fps);
+            mpp_log("fps chg from %d -> %d", ctx->last_fps, fps);
+            ctx->last_fps = fps;
+        }
+        ctx->time_base = ctx->time_end;
+        ctx->frm_cnt = 0;
+    }
+
     return MPP_OK;
 }
 
@@ -1284,10 +1383,17 @@ MPP_RET rc_model_v2_start(void *ctx, EncRcTask *task)
         return MPP_OK;
     }
 
+    if (usr_cfg->fps.fps_out_flex) {
+        fps_chg_update_mode(ctx);
+    }
+
     info->frame_type = (frm->is_intra) ? (INTRA_FRAME) : (INTER_P_FRAME);
 
     if (frm->ref_mode == REF_TO_PREV_INTRA)
         info->frame_type = INTER_VI_FRAME;
+
+    if (frm->is_i_refresh)
+        info->frame_type = INTRA_RFH_FRAME;
 
     p->next_ratio = 0;
     if (p->last_frame_type == INTRA_FRAME) {
@@ -1426,7 +1532,7 @@ MPP_RET rc_model_v2_hal_start(void *ctx, EncRcTask *task)
         RK_S32 qp_scale = p->cur_scale_qp + p->next_ratio;
         RK_S32 start_qp = 0;
 
-        if (frm->is_intra) {
+        if (frm->is_intra && !frm->is_i_refresh) {
             RK_S32 i_quality_delta = usr_cfg->i_quality_delta;
 
             qp_scale = mpp_clip(qp_scale, (info->quality_min << 6), (info->quality_max << 6));
@@ -1485,7 +1591,10 @@ MPP_RET rc_model_v2_hal_start(void *ctx, EncRcTask *task)
         }
     }
 
-    p->start_qp = mpp_clip(p->start_qp, info->quality_min, info->quality_max);
+    if (frm->is_intra)
+        p->start_qp = mpp_clip(p->start_qp, usr_cfg->fqp_min_i, usr_cfg->fqp_max_i);
+    else
+        p->start_qp = mpp_clip(p->start_qp, usr_cfg->fqp_min_p, usr_cfg->fqp_max_p);
     info->quality_target = p->start_qp;
 
     rc_dbg_rc("bitrate [%d : %d : %d] -> [%d : %d : %d]\n",
