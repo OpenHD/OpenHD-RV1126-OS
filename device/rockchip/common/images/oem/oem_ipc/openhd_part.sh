@@ -1,14 +1,16 @@
 #!/bin/sh
 
-TARGET_GUID="614e0000-0000-4a59-8000-492b00004044"
 DEVICE="/dev/mmcblk1"
+PARTITION_NUM=6
+TARGET_GUID="614e0000-0000-4a59-8000-492b00004044"
 
-# Check if any block device partition has the target GUID
-if blkid | grep -q "$TARGET_GUID"; then
-    echo "A partition with GUID $TARGET_GUID is already present. No action needed."
+CURRENT_GUID=$(sgdisk -i $PARTITION_NUM "$DEVICE" | grep "Partition unique GUID" | awk '{print $4}')
+
+if [ "$CURRENT_GUID" = "$TARGET_GUID" ]; then
+    echo "Partition $PARTITION_NUM already has GUID $TARGET_GUID. No action needed."
 else
-    echo "No partition with GUID $TARGET_GUID found. Running partition GUID modification..."
-    sgdisk --partition-guid=6:$TARGET_GUID "$DEVICE" && \
-    echo "Partition GUID modified successfully!"
+    echo "Partition $PARTITION_NUM has GUID $CURRENT_GUID. Updating to $TARGET_GUID..."
+    sgdisk --partition-guid=$PARTITION_NUM:$TARGET_GUID "$DEVICE" && \
+    echo "Partition GUID updated successfully!"
     reboot
 fi
