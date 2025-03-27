@@ -1,3 +1,6 @@
+prebuilts/
+external/
+kernel/
 buildroot/dl/gcc/gcc-11.3.0.tar.xz
 buildroot/dl/gcc/gcc-8.4.0.tar.xz
 buildroot/dl/gcc/gcc-9.4.0.tar.xz
