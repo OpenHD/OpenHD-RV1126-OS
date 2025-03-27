@@ -1,1 +1,0 @@
-../../../../device/rockchip/rv1126_rv1109/Cross-compile-tools-readme.txt
