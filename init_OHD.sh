@@ -27,5 +27,5 @@ fi
 
 # Extract the tar.gz file while preserving permissions
 echo "Extracting the file..."
-tar -xjvf bigFiles.tar.bz2 
+tar -xjvf bigFiles.bz2 
 ls -a
