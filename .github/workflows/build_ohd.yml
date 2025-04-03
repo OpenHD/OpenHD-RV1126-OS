@@ -31,6 +31,4 @@ jobs:
           SCIEBO_PASSWORD: ${{ secrets.SCIEBO_PASSWORD }}
         run: |
           chmod +x init_OHD.sh  # Ensure the script is executable
-          ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD"
-	  ./build.sh rockchip_v12_defconfig
-          ./build.sh
+          ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD" && ./build.sh rockchip_v12_defconfig && ./build.sh
