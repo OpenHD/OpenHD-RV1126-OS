@@ -1,0 +1,1 @@
+cmd_spl/drivers/crypto/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o spl/drivers/crypto/built-in.o spl/drivers/crypto/crypto-uclass.o spl/drivers/crypto/rsa_mod_exp/built-in.o spl/drivers/crypto/fsl/built-in.o spl/drivers/crypto/rockchip/built-in.o 

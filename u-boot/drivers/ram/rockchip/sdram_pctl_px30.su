@@ -1,0 +1,7 @@
+sdram_pctl_px30.c:16:6:pctl_read_mr	0	static
+sdram_pctl_px30.c:32:5:pctl_write_mr	12	static
+sdram_pctl_px30.c:107:5:pctl_dis_zqcs_aref	0	static
+sdram_pctl_px30.c:126:6:pctl_rest_zqcs_aref	0	static
+sdram_pctl_px30.c:61:5:pctl_write_vrefdq	40	static
+sdram_pctl_px30.c:138:5:pctl_remodify_sdram_params	12	static
+sdram_pctl_px30.c:176:5:pctl_cfg	12	static

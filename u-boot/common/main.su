@@ -1,0 +1,2 @@
+main.c:21:13:show_boot_progress	0	static
+main.c:44:6:main_loop	16	static

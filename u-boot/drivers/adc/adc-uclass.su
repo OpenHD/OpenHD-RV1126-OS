@@ -1,0 +1,12 @@
+adc-uclass.c:397:12:adc_pre_probe	16	static
+adc-uclass.c:30:12:check_channel	24	static
+adc-uclass.c:76:5:adc_data_mask	8	static
+adc-uclass.c:87:5:adc_stop	8	static
+adc-uclass.c:97:5:adc_start_channel	16	static
+adc-uclass.c:116:5:adc_start_channels	16	static
+adc-uclass.c:135:5:adc_channel_data	32	static
+adc-uclass.c:161:5:adc_channels_data	32	static
+adc-uclass.c:188:5:adc_channel_single_shot	24	static
+adc-uclass.c:236:5:adc_channels_single_shot	32	static
+adc-uclass.c:315:5:adc_vdd_value	8	static
+adc-uclass.c:336:5:adc_vss_value	8	static

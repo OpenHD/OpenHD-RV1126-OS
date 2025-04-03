@@ -1,0 +1,3 @@
+micron.c:39:12:mt29f2g01abagd_ooblayout_ecc	0	static
+micron.c:51:12:mt29f2g01abagd_ooblayout_free	0	static
+micron.c:69:12:mt29f2g01abagd_ecc_get_status	0	static

@@ -1,0 +1,8 @@
+sf-uclass.c:87:12:spi_flash_post_bind	0	static
+sf-uclass.c:16:5:spi_flash_read_dm	4	static
+sf-uclass.c:21:5:spi_flash_write_dm	4	static
+sf-uclass.c:27:5:spi_flash_erase_dm	0	static
+sf-uclass.c:32:5:spl_flash_get_sw_write_prot	0	static
+sf-uclass.c:56:6:spi_flash_free	0	static
+sf-uclass.c:61:5:spi_flash_probe_bus_cs	80	static
+sf-uclass.c:45:19:spi_flash_probe	24	static

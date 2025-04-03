@@ -1,0 +1,7 @@
+drm_modes.c:50:26:drm_mode_create	8	static
+drm_modes.c:70:6:drm_mode_copy	8	static
+drm_modes.c:79:6:drm_mode_destroy	0	static
+drm_modes.c:146:6:drm_mode_match	24	static
+drm_modes.c:189:6:drm_mode_equal	0	static
+drm_modes.c:207:6:drm_display_mode_from_videomode	0	static
+drm_modes.c:246:6:drm_display_mode_to_videomode	0	static

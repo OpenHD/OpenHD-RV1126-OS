@@ -1,0 +1,2 @@
+rockchip_pm.c:12:5:device_suspend	0	static
+rockchip_pm.c:17:5:device_resume	0	static

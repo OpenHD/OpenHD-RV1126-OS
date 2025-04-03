@@ -1,0 +1,10 @@
+rockchip_rng.c:329:12:rockchip_rng_read	24	static
+rockchip_rng.c:282:12:rkrng_init	8	static
+rockchip_rng.c:357:12:rockchip_rng_ofdata_to_platdata	16	static
+rockchip_rng.c:372:12:rockchip_rng_probe	16	static
+rockchip_rng.c:225:12:trngv1_init	16	static
+rockchip_rng.c:139:12:rk_rng_read_regs	32	static
+rockchip_rng.c:252:12:trngv1_rng_read	24	static
+rockchip_rng.c:191:12:cryptov2_rng_read	24	static
+rockchip_rng.c:160:12:cryptov1_rng_read	24	static
+rockchip_rng.c:295:12:rkrng_rng_read	24	static

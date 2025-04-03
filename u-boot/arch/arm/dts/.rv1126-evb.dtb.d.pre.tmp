@@ -1,0 +1,19 @@
+.rv1126-evb.dtb.pre.o: arch/arm/dts/.rv1126-evb.dtb.pre.tmp \
+ include/linux/kconfig.h include/generated/autoconf.h \
+ arch/arm/dts/rv1126.dtsi \
+ arch/arm/dts/include/dt-bindings/clock/rv1126-cru.h \
+ arch/arm/dts/include/dt-bindings/power/rv1126-power.h \
+ arch/arm/dts/include/dt-bindings/gpio/gpio.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/irq.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/arm-gic.h \
+ arch/arm/dts/include/dt-bindings/pinctrl/rockchip.h \
+ arch/arm/dts/include/dt-bindings/soc/rockchip,boot-mode.h \
+ arch/arm/dts/include/dt-bindings/soc/rockchip-system-status.h \
+ arch/arm/dts/include/dt-bindings/suspend/rockchip-rv1126.h \
+ arch/arm/dts/rv1126-dram-default-timing.dtsi \
+ arch/arm/dts/include/dt-bindings/clock/rockchip-ddr.h \
+ arch/arm/dts/include/dt-bindings/memory/rv1126-dram.h \
+ arch/arm/dts/rv1126-pinctrl.dtsi arch/arm/dts/rockchip-pinconf.dtsi \
+ arch/arm/dts/rv1126-u-boot.dtsi \
+ arch/arm/dts/include/dt-bindings/input/input.h \
+ arch/arm/dts/include/dt-bindings/input/linux-event-codes.h

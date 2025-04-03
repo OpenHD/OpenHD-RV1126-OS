@@ -1,0 +1,10 @@
+rk8xx.c:195:12:rk8xx_reg_count	8	static
+rk8xx.c:362:13:rk8xx_plug_out_handler	0	static
+rk8xx.c:208:12:rk8xx_write	16	static
+rk8xx.c:260:12:rk8xx_resume	8	static
+rk8xx.c:222:12:rk8xx_read	16	static
+rk8xx.c:277:12:rk8xx_shutdown	24	static
+rk8xx.c:235:12:rk8xx_suspend	24	static
+rk8xx.c:368:12:rk8xx_ofdata_to_platdata	32	static
+rk8xx.c:478:12:rk8xx_probe	72	static
+rk8xx.c:317:12:rk8xx_bind	8	static

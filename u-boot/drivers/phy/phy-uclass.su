@@ -1,0 +1,10 @@
+phy-uclass.c:37:5:generic_phy_get_by_index	104	static
+phy-uclass.c:83:5:generic_phy_get_by_name	16	static
+phy-uclass.c:99:5:generic_phy_init	0	static
+phy-uclass.c:110:5:generic_phy_reset	0	static
+phy-uclass.c:121:5:generic_phy_exit	0	static
+phy-uclass.c:132:5:generic_phy_power_on	0	static
+phy-uclass.c:143:5:generic_phy_power_off	0	static
+phy-uclass.c:154:5:generic_phy_configure	0	static
+phy-uclass.c:165:5:generic_phy_validate	4	static
+phy-uclass.c:177:5:generic_phy_set_mode_ext	16	static

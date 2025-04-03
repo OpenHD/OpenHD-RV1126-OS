@@ -1,0 +1,1 @@
+cmd_spl/drivers/serial/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o spl/drivers/serial/built-in.o spl/drivers/serial/serial-uclass.o spl/drivers/serial/ns16550.o 

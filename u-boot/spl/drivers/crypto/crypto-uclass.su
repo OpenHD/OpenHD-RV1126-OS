@@ -1,0 +1,14 @@
+crypto-uclass.c:44:5:crypto_algo_nbits	8	static
+crypto-uclass.c:79:17:crypto_get_device	16	static
+crypto-uclass.c:106:5:crypto_sha_init	0	static
+crypto-uclass.c:119:5:crypto_sha_update	4	static
+crypto-uclass.c:132:5:crypto_sha_final	8	static
+crypto-uclass.c:175:5:crypto_hmac_init	8	static
+crypto-uclass.c:189:5:crypto_hmac_update	4	static
+crypto-uclass.c:202:5:crypto_hmac_final	0	static
+crypto-uclass.c:212:5:crypto_sha_csum	24	static
+crypto-uclass.c:230:5:crypto_sha_regions_csum	32	static
+crypto-uclass.c:254:5:crypto_rsa_verify	16	static
+crypto-uclass.c:267:5:crypto_cipher	12	static
+crypto-uclass.c:278:5:crypto_mac	8	static
+crypto-uclass.c:289:5:crypto_ae	16	static

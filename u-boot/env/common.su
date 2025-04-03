@@ -1,0 +1,10 @@
+common.c:34:5:env_get_yesno	8	static
+common.c:44:13:board_env_fixup	0	static
+common.c:49:7:env_get_default	16	static
+common.c:64:6:set_default_env	24	static
+common.c:99:5:set_default_vars	24	static
+common.c:110:5:set_board_env	32	static
+common.c:176:5:env_import	32	static
+common.c:261:5:env_export	48	static
+common.c:288:6:env_relocate	0	static
+common.c:308:5:env_complete	48	static

@@ -1,0 +1,12 @@
+rk_atags.c:119:12:js_hash	8	static
+rk_atags.c:133:5:atags_bad_magic	8	static
+rk_atags.c:156:5:atags_overflow	8	static
+rk_atags.c:173:5:atags_is_available	0	static
+rk_atags.c:180:5:atags_set_tag	40	static
+rk_atags.c:286:13:atags_get_tag	16	static
+rk_atags.c:329:5:get_bootdev_by_brom_bootsource	0	static
+rk_atags.c:340:5:atags_set_bootdev_by_brom_bootsource	56	static
+rk_atags.c:350:5:get_bootdev_by_spl_bootdevice	0	static
+rk_atags.c:358:5:atags_set_bootdev_by_spl_bootdevice	56	static
+rk_atags.c:370:5:atags_set_pub_key	824	static
+rk_atags.c:386:6:atags_destroy	0	static

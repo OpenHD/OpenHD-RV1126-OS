@@ -1,0 +1,2 @@
+boot_android.c:20:12:do_boot_android	24	static
+boot_android.c:607:12:do_boot_avb	24	static

@@ -1,0 +1,1 @@
+sysreset-syscon-reboot.c:24:12:syscon_reboot_request_by_mode	24	static

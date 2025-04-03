@@ -1,0 +1,1 @@
+cmd_drivers/usb/musb/built-in.o :=  rm -f drivers/usb/musb/built-in.o; /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ar rcs drivers/usb/musb/built-in.o

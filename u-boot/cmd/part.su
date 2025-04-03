@@ -1,0 +1,4 @@
+part.c:48:12:do_part_list	688	static
+part.c:111:12:do_part_start	656	static
+part.c:145:12:do_part_size	656	static
+part.c:179:12:do_part	152	static

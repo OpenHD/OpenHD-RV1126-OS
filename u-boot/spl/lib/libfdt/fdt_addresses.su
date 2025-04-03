@@ -1,0 +1,2 @@
+fdt_addresses.c:58:5:fdt_address_cells	16	static
+fdt_addresses.c:78:5:fdt_size_cells	16	static

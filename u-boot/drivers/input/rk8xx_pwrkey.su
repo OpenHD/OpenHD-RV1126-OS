@@ -1,0 +1,3 @@
+rk8xx_pwrkey.c:36:12:rk8xx_pwrkey_probe	24	static
+rk8xx_pwrkey.c:14:13:rk8xx_pwron_rise_handler	8	static
+rk8xx_pwrkey.c:25:13:rk8xx_pwron_fall_handler	8	static

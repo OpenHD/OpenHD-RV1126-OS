@@ -1,0 +1,4 @@
+crypto_hash_cache.c:78:6:crypto_flush_cacheline	0	static
+crypto_hash_cache.c:92:27:crypto_hash_cache_alloc	24	static
+crypto_hash_cache.c:116:6:crypto_hash_cache_free	8	static
+crypto_hash_cache.c:127:5:crypto_hash_update_with_cache	56	static

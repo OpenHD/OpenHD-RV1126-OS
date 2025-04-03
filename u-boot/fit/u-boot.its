@@ -1,0 +1,79 @@
+
+/*
+ * Copyright (C) 2020 Rockchip Electronic Co.,Ltd
+ *
+ * Simple U-boot fit source file containing ATF/OP-TEE/U-Boot/dtb/MCU
+ */
+
+/dts-v1/;
+
+/ {
+	description = "FIT Image with ATF/OP-TEE/U-Boot/MCU";
+	#address-cells = <1>;
+
+	images {
+
+		uboot {
+			description = "U-Boot";
+			data = /incbin/("u-boot-nodtb.bin.gz");
+			type = "standalone";
+			arch = "arm";
+			os = "U-Boot";
+			compression = "gzip";
+			load = <0x00600000>;
+			digest {
+				value = /incbin/("./u-boot-nodtb.bin.digest");
+				algo = "sha256";
+			};
+			hash {
+				algo = "sha256";
+			};
+		};
+		optee {
+			description = "OP-TEE";
+			data = /incbin/("tee.bin.gz");
+			type = "firmware";
+			arch = "arm";
+			os = "op-tee";
+			compression = "gzip";
+			entry = <0x8400000>;
+			load = <0x8400000>;
+			digest {
+				value = /incbin/("./tee.bin.digest");
+				algo = "sha256";
+			};
+			hash {
+				algo = "sha256";
+			};
+		};
+		fdt {
+			description = "U-Boot dtb";
+			data = /incbin/("./u-boot.dtb");
+			type = "flat_dt";
+			arch = "arm";
+			compression = "none";
+			hash {
+				algo = "sha256";
+			};
+		};
+	};
+
+	configurations {
+		default = "conf";
+		conf {
+			description = "rv1126-evb";
+			rollback-index = <0x0>;
+			firmware = "optee";
+			loadables = "uboot";
+			
+			fdt = "fdt";
+			signature {
+				algo = "sha256,rsa2048";
+				
+				key-name-hint = "dev";
+				sign-images = "fdt", "loadables", "firmware";
+			};
+		};
+	};
+};
+

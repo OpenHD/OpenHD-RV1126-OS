@@ -1,0 +1,10 @@
+.rk3066a-mk808.dtb.pre.o: arch/arm/dts/.rk3066a-mk808.dtb.pre.tmp \
+ include/linux/kconfig.h include/generated/autoconf.h \
+ arch/arm/dts/rk3066a.dtsi arch/arm/dts/include/dt-bindings/gpio/gpio.h \
+ arch/arm/dts/include/dt-bindings/pinctrl/rockchip.h \
+ arch/arm/dts/include/dt-bindings/clock/rk3066a-cru.h \
+ arch/arm/dts/include/dt-bindings/clock/rk3188-cru-common.h \
+ arch/arm/dts/rk3xxx.dtsi \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/irq.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/arm-gic.h \
+ arch/arm/dts/skeleton.dtsi

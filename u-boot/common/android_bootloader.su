@@ -1,0 +1,10 @@
+android_bootloader.c:56:12:android_bootloader_message_write	24	static
+android_bootloader.c:34:5:android_bootloader_message_load	24	static
+android_bootloader.c:78:31:android_bootloader_load_and_clear_mode	2064	static
+android_bootloader.c:122:5:android_bcb_write	2184	static
+android_bootloader.c:294:5:android_bootloader_boot_kernel	136	static
+android_bootloader.c:391:7:android_assemble_cmdline	96	static
+android_bootloader.c:1049:5:android_image_load_by_partname	136	static
+android_bootloader.c:1075:5:android_bootloader_boot_flow	152	static
+android_bootloader.c:1260:5:android_avb_boot_flow	136	static
+android_bootloader.c:1293:5:android_boot_flow	136	static

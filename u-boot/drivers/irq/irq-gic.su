@@ -1,0 +1,9 @@
+irq-gic.c:134:12:gic_irq_enable	16	static
+irq-gic.c:171:12:gic_irq_disable	0	static
+irq-gic.c:185:12:gic_irq_set_type	0	static
+irq-gic.c:207:13:gic_irq_eoi	0	static
+irq-gic.c:218:12:gic_irq_get	0	static
+irq-gic.c:230:12:gic_irq_suspend	8	static
+irq-gic.c:284:12:gic_irq_resume	16	static
+irq-gic.c:355:12:gic_irq_init	8	static
+irq-gic.c:409:18:arch_gic_get_irqchip	0	static

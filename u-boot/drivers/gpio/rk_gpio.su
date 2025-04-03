@@ -1,0 +1,6 @@
+rk_gpio.c:88:12:rockchip_gpio_set_value	16	static
+rk_gpio.c:80:12:rockchip_gpio_get_value	8	static
+rk_gpio.c:67:12:rockchip_gpio_direction_output	16	static
+rk_gpio.c:57:12:rockchip_gpio_direction_input	16	static
+rk_gpio.c:100:12:rockchip_gpio_get_function	16	static
+rk_gpio.c:126:12:rockchip_gpio_probe	32	static

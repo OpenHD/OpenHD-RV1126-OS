@@ -1,0 +1,12 @@
+fuel_gauge_uclass.c:13:5:fuel_gauge_capability	8	static
+fuel_gauge_uclass.c:23:5:fuel_gauge_bat_is_exist	8	static
+fuel_gauge_uclass.c:33:5:fuel_gauge_get_current	8	static
+fuel_gauge_uclass.c:43:5:fuel_gauge_get_voltage	8	static
+fuel_gauge_uclass.c:53:5:fuel_gauge_update_get_soc	8	static
+fuel_gauge_uclass.c:63:6:fuel_gauge_get_chrg_online	8	static
+fuel_gauge_uclass.c:73:5:fuel_gauge_get_temperature	16	static
+fuel_gauge_uclass.c:83:5:charger_set_charger_voltage	16	static
+fuel_gauge_uclass.c:93:5:charger_set_current	16	static
+fuel_gauge_uclass.c:103:5:charger_set_iprechg_current	16	static
+fuel_gauge_uclass.c:113:5:charger_set_enable	8	static
+fuel_gauge_uclass.c:123:5:charger_set_disable	8	static

@@ -1,0 +1,11 @@
+spl_ab.c:192:13:spl_slot_is_bootable	0	static
+spl_ab.c:111:12:spl_read_ab_metadata	648	static
+spl_ab.c:88:13:spl_ab_data_update_crc_and_byteswap	8	static
+spl_ab.c:137:12:spl_write_ab_metadata	648	static
+spl_ab.c:10:5:safe_memcmp.part.1	12	static
+spl_ab.c:172:12:spl_ab_data_read	96	static
+spl_ab.c:10:5:safe_memcmp	0	static
+spl_ab.c:203:5:spl_get_current_slot	48	static
+spl_ab.c:254:5:spl_ab_append_part_slot	24	static
+spl_ab.c:288:5:spl_ab_decrease_tries	120	static
+spl_ab.c:327:5:spl_ab_decrease_reset	48	static

@@ -1,0 +1,5 @@
+reset-rockchip.c:31:12:rockchip_reset_free	0	static
+reset-rockchip.c:54:12:rockchip_reset_deassert	8	static
+reset-rockchip.c:39:12:rockchip_reset_assert	8	static
+reset-rockchip.c:18:12:rockchip_reset_request	8	static
+reset-rockchip.c:76:12:rockchip_reset_probe	24	static

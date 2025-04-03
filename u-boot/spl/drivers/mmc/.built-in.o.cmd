@@ -1,0 +1,1 @@
+cmd_spl/drivers/mmc/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o spl/drivers/mmc/built-in.o spl/drivers/mmc/mmc.o spl/drivers/mmc/mmc-uclass.o spl/drivers/mmc/mmc_write.o spl/drivers/mmc/dw_mmc.o spl/drivers/mmc/rockchip_dw_mmc.o spl/drivers/mmc/rpmb.o 

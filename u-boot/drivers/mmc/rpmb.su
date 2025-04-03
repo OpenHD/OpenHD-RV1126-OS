@@ -1,0 +1,12 @@
+rpmb.c:70:12:mmc_rpmb_request	80	static
+rpmb.c:163:13:rpmb_hmac	264	static
+rpmb.c:103:12:mmc_rpmb_response	80	static
+rpmb.c:151:12:mmc_rpmb_status	592	static
+rpmb.c:207:5:mmc_rpmb_get_counter	600	static
+rpmb.c:226:5:mmc_rpmb_set_key	600	static
+rpmb.c:240:5:mmc_rpmb_read	72	dynamic
+rpmb.c:296:5:mmc_rpmb_write	80	dynamic
+rpmb.c:354:5:read_counter	16	static
+rpmb.c:365:5:program_key	16	static
+rpmb.c:380:5:authenticated_read	16	static
+rpmb.c:393:5:authenticated_write	16	static

@@ -1,0 +1,12 @@
+fit.c:38:12:fit_sig_require_conf.isra.1	24	static
+fit.c:139:14:fit_get_blob.isra.3	144	static
+fit.c:57:5:fit_default_conf_get_node	16	static
+fit.c:88:12:fdt_image_get_offset_size	32	static
+fit.c:127:12:fit_image_get_param	16	static
+fit.c:68:5:fix_image_set_addr	16	static
+fit.c:216:12:fit_image_fixup_alloc	48	static
+fit.c:245:5:fit_image_pre_process	8	static
+fit.c:266:5:fit_image_fail_process	24	static
+fit.c:337:7:fit_image_get_bootables_size	48	static
+fit.c:363:7:fit_image_load_bootables	144	static
+fit.c:428:5:fit_image_init_resource	168	static

@@ -1,0 +1,7 @@
+sha256.c:59:13:sha256_process	136	static
+sha256.c:190:6:sha256_update.part.0	24	static
+sha256.c:44:6:sha256_starts	0	static
+sha256.c:190:6:sha256_update	0	static
+sha256.c:231:6:sha256_finish	24	static
+sha256.c:263:6:sha256_csum	120	static
+sha256.c:277:6:sha256_csum_wd	120	static

@@ -1,0 +1,8 @@
+pinctrl-rockchip-core.c:508:12:rockchip_pinctrl_get_pins_count	8	static
+pinctrl-rockchip-core.c:418:12:rockchip_pinctrl_set_state	544	static
+pinctrl-rockchip-core.c:38:6:rockchip_get_recalced_mux	24	static
+pinctrl-rockchip-core.c:86:5:rockchip_get_mux_data	16	static
+pinctrl-rockchip-core.c:150:12:rockchip_pinctrl_get_gpio_mux	48	static
+pinctrl-rockchip-core.c:257:5:rockchip_translate_drive_value	0	static
+pinctrl-rockchip-core.c:305:5:rockchip_translate_pull_value	0	static
+pinctrl-rockchip-core.c:637:5:rockchip_pinctrl_probe	56	static

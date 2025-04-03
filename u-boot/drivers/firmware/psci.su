@@ -1,0 +1,4 @@
+psci.c:57:12:psci_probe	8	static
+psci.c:30:22:__invoke_psci_fn_smc	56	static
+psci.c:20:22:__invoke_psci_fn_hvc	56	static
+psci.c:40:12:psci_bind	8	static

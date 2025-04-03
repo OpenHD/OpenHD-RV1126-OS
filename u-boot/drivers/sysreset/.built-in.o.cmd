@@ -1,0 +1,1 @@
+cmd_drivers/sysreset/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o drivers/sysreset/built-in.o drivers/sysreset/sysreset-uclass.o drivers/sysreset/sysreset-syscon-reboot.o drivers/sysreset/sysreset_psci.o drivers/sysreset/sysreset_rockchip.o 

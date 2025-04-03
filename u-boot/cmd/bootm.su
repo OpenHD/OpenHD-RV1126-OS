@@ -1,0 +1,3 @@
+bootm.c:92:5:do_bootm	56	static
+bootm.c:206:5:do_bootd	8	static
+bootm.c:142:5:bootm_maybe_autostart	24	static

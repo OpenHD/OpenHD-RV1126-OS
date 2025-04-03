@@ -1,0 +1,201 @@
+
+u-boot-tpl:     file format elf32-littlearm
+
+SYMBOL TABLE:
+ff701000 l    d  .text	00000000 .text
+ff705740 l    d  .rodata	00000000 .rodata
+ff705b34 l    d  .data	00000000 .data
+ff706f94 l    d  .u_boot_list	00000000 .u_boot_list
+ff706f94 l    d  .bss	00000000 .bss
+00000000 l    d  .comment	00000000 .comment
+00000000 l    d  .ARM.attributes	00000000 .ARM.attributes
+00000000 l    d  .debug_aranges	00000000 .debug_aranges
+00000000 l    d  .debug_info	00000000 .debug_info
+00000000 l    d  .debug_abbrev	00000000 .debug_abbrev
+00000000 l    d  .debug_line	00000000 .debug_line
+00000000 l    d  .debug_frame	00000000 .debug_frame
+00000000 l    d  .debug_str	00000000 .debug_str
+00000000 l    d  .debug_loc	00000000 .debug_loc
+00000000 l    d  .debug_ranges	00000000 .debug_ranges
+00000000 l    df *ABS*	00000000 tpl/arch/arm/lib/vectors.o
+ff701040 l       .text	00000000 undefined_instruction
+ff701040 l       .text	00000000 software_interrupt
+ff701040 l       .text	00000000 prefetch_abort
+ff701040 l       .text	00000000 data_abort
+ff701040 l       .text	00000000 not_used
+ff701040 l       .text	00000000 irq
+ff701040 l       .text	00000000 fiq
+00000000 l    df *ABS*	00000000 tpl/arch/arm/lib/crt0.o
+00000000 l    df *ABS*	00000000 tpl/arch/arm/lib/setjmp.o
+00000000 l    df *ABS*	00000000 spl.c
+00000000 l    df *ABS*	00000000 zimage.c
+00000000 l    df *ABS*	00000000 bootm-fdt.c
+00000000 l    df *ABS*	00000000 tpl/arch/arm/lib/memset.o
+00000000 l    df *ABS*	00000000 tpl/arch/arm/lib/memcpy.o
+00000000 l    df *ABS*	00000000 sections.c
+00000000 l    df *ABS*	00000000 stack.c
+00000000 l    df *ABS*	00000000 interrupts.c
+00000000 l    df *ABS*	00000000 stacktrace.c
+00000000 l    df *ABS*	00000000 cache.c
+00000000 l    df *ABS*	00000000 cache-cp15.c
+00000000 l    df *ABS*	00000000 psci-dt.c
+00000000 l    df *ABS*	00000000 param.c
+00000000 l    df *ABS*	00000000 sdram.c
+00000000 l    df *ABS*	00000000 clk_rv1126.c
+00000000 l    df *ABS*	00000000 rv1126.c
+00000000 l    df *ABS*	00000000 bootrom.c
+ff705b34 l     O .data	00000028 brom_ctx
+00000000 l    df *ABS*	00000000 tpl.c
+00000000 l    df *ABS*	00000000 rk_atags.c
+ff7057f4 l     O .rodata	0000000a CSWTCH.10
+00000000 l    df *ABS*	00000000 board_init.c
+00000000 l    df *ABS*	00000000 sdram_common.c
+00000000 l    df *ABS*	00000000 sdram_rv1126.c
+ff701e30 l     F .text	000000dc update_noc_timing
+ff701f0c l     F .text	000000d6 data_training_rg
+ff701fe2 l     F .text	00000018 sw_set_ack.isra.2
+ff701ffc l     F .text	00000090 phy_pll_set.isra.3
+ff70208c l     F .text	0000002c lp4_odt_calc
+ff7020b8 l     F .text	00000084 get_min_value.isra.8
+ff70213c l     F .text	00000026 low_power_update.isra.9
+ff702164 l     F .text	0000004c get_ddr_drv_odt_info
+ff7021b0 l     F .text	00000760 set_ds_odt
+ff702910 l     F .text	00000110 rkclk_set_dpll.isra.14
+ff702a20 l     F .text	00000174 ddr_set_atags.constprop.28
+ff702b94 l     F .text	000000d4 modify_dq_deskew.constprop.32
+ff702c68 l     F .text	00000110 modify_ca_deskew.constprop.33
+ff702df0 l     F .text	00000648 data_training
+ff703438 l     F .text	00000820 sdram_init_.constprop.25
+ff706fc0 l     O .bss	000001d0 fsp_param
+ff707190 l     O .bss	00000001 lp3_odt_value
+ff707191 l     O .bss	00000008 wrlvl_result
+ff7060a8 l     O .data	00000060 d3_phy_odt_2_ohm
+ff706120 l     O .data	0000005c d4lp3_phy_drv_2_ohm
+ff70617c l     O .data	00000060 d4lp3_phy_odt_2_ohm
+ff70620a l     O .data	0000005c lp4_phy_drv_2_ohm
+ff706266 l     O .data	00000060 lp4_phy_odt_2_ohm
+ff705740 l     O .rodata	0000005c d3_phy_drv_2_ohm
+ff7058e8 l     O .rodata	00000042 dq_sel
+ff70579c l     O .rodata	00000020 dqs_dq_skew_adr
+ff7057bc l     O .rodata	00000008 grp_addr
+ff7057c4 l     O .rodata	0000002a pctl_need_update_reg
+ff7057ee l     O .rodata	00000006 phy_need_update_reg
+ff705b29 l     O .rodata	00000008 wrlvl_result_offset
+00000000 l    df *ABS*	00000000 sdram_pctl_px30.c
+00000000 l    df *ABS*	00000000 serial-uclass.c
+00000000 l    df *ABS*	00000000 ns16550.c
+00000000 l    df *ABS*	00000000 ashldi3.o
+00000000 l    df *ABS*	00000000 lib1funcs.o
+ff705570 l     F .text	00000010 Ldiv0
+00000000 l    df *ABS*	00000000 lshrdi3.o
+00000000 l    df *ABS*	00000000 uldivmod.o
+ff705710 l       .text	00000000 L_div_by_0
+ff70569c l       .text	00000000 L_pow2
+ff705684 l       .text	00000000 L_div_32_32
+ff7055c8 l       .text	00000000 L_div_64_64
+ff7055d8 l       .text	00000000 L_lsl_4
+ff705604 l       .text	00000000 L_lsl_1
+ff705630 l       .text	00000000 L_subtract
+ff70564c l       .text	00000000 L_update
+ff705670 l       .text	00000000 L_exit
+00000000 l    df *ABS*	00000000 div0.c
+00000000 l    df *ABS*	00000000 part.c
+ff706f94 l     O .u_boot_list	00000000 start.8308
+ff706f94 l     O .u_boot_list	00000000 start.8312
+ff706f94 l     O .u_boot_list	00000000 start.8384
+ff706f94 l     O .u_boot_list	00000000 start.8388
+ff706f94 l     O .u_boot_list	00000000 end.8315
+ff706f94 l     O .u_boot_list	00000000 end.8391
+00000000 l    df *ABS*	00000000 
+ff706f94 l     O .u_boot_list	00000000 __rel_dyn_start
+ff70719c l     O .bss	00000000 __bss_end
+ff706f94 l     O .bss	00000000 __bss_start
+ff706f94 l     O .u_boot_list	00000000 __rel_dyn_end
+ff701000 l     O .text	00000000 __image_copy_start
+ff705730 l     F .text	00000008 __board_init_f_from_arm
+ff705738 l     F .text	00000008 __save_boot_params_from_arm
+ff7016f0 g     F .text	0000001c longjmp
+ff70536c g     F .text	0000004c debug_uart_init
+ff7053b8 g     F .text	00000020 __ashldi3
+ff701bf0 g     F .text	00000040 sdram_detect_bg
+ff7016e0 g     F .text	00000010 setjmp
+ff7051ec g     F .text	0000005a pctl_remodify_sdram_params
+ff7010d8  w    F .text	0000002e __udelay
+ff7011dc g     F .text	00000114 atags_set_tag
+ff703d14 g     F .text	00000c28 ddr_set_rate
+ff7050cc g     F .text	0000003a pctl_dis_zqcs_aref
+ff705580 g     F .text	00000020 __aeabi_llsr
+ff7061e8 g     O .data	00000014 ddr_cfg_2_rbc
+ff70110a g     F .text	0000000c hang
+ff701150  w    F .text	00000004 arch_cpu_init
+ff70529c g     F .text	00000058 printascii
+ff706108 g     O .data	00000018 d4_rbc_2_d3_rbc
+ff701020 g       .text	00000000 _not_used
+ff705130 g     F .text	000000bc pctl_write_vrefdq
+ff701d78 g     F .text	000000b8 sdram_detect_high_row
+ff703c58 g     F .text	00000078 record_dq_prebit
+ff701a2a g     F .text	0000012e sdram_org_config
+ff701734  w    F .text	00000020 board_init_f_boot_flags
+00000208 g       *ABS*	00000000 __bss_size
+ff701400 g     F .text	000002e0 memcpy
+ff7055a0 g     F .text	00000188 __aeabi_uldivmod
+ff706f94 g     O .u_boot_list	00000000 __image_copy_end
+ff7053d8 g     F .text	0000009c __udivsi3
+ff70101c g       .text	00000000 _data_abort
+ff70171a g     F .text	00000018 board_init_f_init_reserve
+ff701024 g       .text	00000000 _irq
+ff701754  w    F .text	00000002 show_boot_progress
+ff705f70 g     O .data	00000138 common_info
+ff7061dc g     O .data	0000000c ddr4_cfg_2_rbc
+ff70493c g     F .text	00000700 sdram_init
+ff7012f0 g     F .text	0000001c atags_destroy
+ff701078 g     F .text	0000005c save_boot_params
+ff7062c8 g     O .data	00000ccc sdram_configs
+ff7010d4  w    F .text	00000004 timer_init
+ff701018 g       .text	00000000 _prefetch_abort
+ff705580 g     F .text	00000020 __lshrdi3
+ff701180 g     F .text	0000002c atags_bad_magic
+ff705474 g     F .text	000000cc __aeabi_idiv
+ff701004 g       .text	00000000 _start
+ff701118  w    F .text	00000038 rockchip_stimer_init
+ff701106 g     F .text	00000004 udelay
+ff701028 g       .text	00000000 _fiq
+ff701010 g       .text	00000000 _undefined_instruction
+ff701008 g     F .text	00000000 save_boot_params_ret
+ff70506e g     F .text	0000005e pctl_write_mr
+ff701360 g     F .text	0000009e memset
+ff703cd0 g     F .text	00000044 get_default_sdram_config
+ff705728 g     F .text	00000004 __div0
+ff7053d8 g     F .text	0000009c __aeabi_uidiv
+ff701bb0 g     F .text	00000040 sdram_detect_bank
+ff701a10 g     F .text	0000001a sdram_copy_to_reg
+ff702dd4 g     F .text	0000001a send_a_refresh
+ff705474 g     F .text	000000cc __divsi3
+ff705106 g     F .text	00000028 pctl_rest_zqcs_aref
+ff702d78 g     F .text	0000005c read_mr
+ff701d30 g     F .text	00000048 sdram_detect_row_3_4
+ff701154 g     F .text	0000002c board_init_f
+ff701b58 g     F .text	00000058 sdram_detect_col
+ff706f94 g       .u_boot_list	00000000 _image_binary_end
+ff701c30 g     F .text	000000a2 sdram_detect_dbw
+ff705246 g     F .text	00000054 pctl_cfg
+ff701014 g       .text	00000000 _software_interrupt
+ff701758 g     F .text	0000004c sdram_print_dram_type
+ff7011ac g     F .text	00000030 atags_overflow
+ff7053b8 g     F .text	00000020 __aeabi_llsl
+ff705540 g     F .text	00000018 __aeabi_uidivmod
+ff70503c g     F .text	00000032 pctl_read_mr
+ff7052f4 g     F .text	00000078 printdec
+ff701cd4 g     F .text	0000005c sdram_detect_row
+ff70170c g     F .text	0000000e board_init_f_alloc_reserve
+ff701068 g     F .text	00000010 back_to_bootrom
+ff7017a4 g     F .text	000000be sdram_get_cs_cap
+ff706f94 g     O .bss	0000002c dram_info
+ff705b5c g     O .data	00000414 addrmap
+ff7061fc g     O .data	0000000e ddr_cfg_2_rbc_p2
+ff705558 g     F .text	00000018 __aeabi_idivmod
+ff701864 g     F .text	000001ac sdram_print_ddr_info
+ff701320 g     F .text	00000024 _main
+ff701044 g     F .text	00000024 board_debug_uart_init
+
+

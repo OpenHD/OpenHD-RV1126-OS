@@ -1,0 +1,2 @@
+common_fit.c:14:7:fdt_getprop_u32	16	static
+common_fit.c:31:5:fit_find_config_node	40	static

@@ -1,0 +1,4 @@
+arch_timer.c:15:5:timer_init	0	static
+arch_timer.c:24:20:get_ticks	0	static
+arch_timer.c:37:7:timer_get_boot_us	32	static
+arch_timer.c:42:7:get_tbclk	0	static

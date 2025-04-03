@@ -1,0 +1,13 @@
+gigadevice.c:54:12:gd5fxgq4xa_ooblayout_ecc	0	static
+gigadevice.c:66:12:gd5fxgq4xa_ooblayout_free	0	static
+gigadevice.c:88:12:gd5fxgq4xa_ecc_get_status	0	static
+gigadevice.c:112:12:gd5fxgqx_variant2_ooblayout_ecc	0	static
+gigadevice.c:143:12:gd5fxgq4xc_ooblayout_256_ecc	0	static
+gigadevice.c:155:12:gd5fxgq4xc_ooblayout_256_free	0	static
+gigadevice.c:172:12:gd5fxgqx_variant3_ooblayout_ecc	0	static
+gigadevice.c:178:12:gd5fxgqx_variant3_ooblayout_free	0	static
+gigadevice.c:275:12:gd5fxgq4ufxxg_ecc_get_status	0	static
+gigadevice.c:238:12:gd5fxgq5xexxg_ecc_get_status	72	static
+gigadevice.c:196:12:gd5fxgq4uexxg_ecc_get_status	72	static
+gigadevice.c:477:12:gigadevice_spinand_init	56	static
+gigadevice.c:124:12:gd5fxgqx_variant2_ooblayout_free	0	static

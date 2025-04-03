@@ -1,0 +1,4 @@
+pwm_backlight.c:167:12:pwm_backlight_probe	0	static
+pwm_backlight.c:72:12:pwm_backlight_disable	16	static
+pwm_backlight.c:29:12:pwm_backlight_enable	16	static
+pwm_backlight.c:112:12:pwm_backlight_ofdata_to_platdata	112	static

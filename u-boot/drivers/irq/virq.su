@@ -1,0 +1,14 @@
+virq.c:52:26:find_virq_desc	8	static
+virq.c:170:13:reg_base_get	8	static
+virq.c:319:12:virq_init	0	static
+virq.c:185:6:virq_chip_generic_handler	32	static
+virq.c:325:12:__virq_enable	32	static
+virq.c:80:5:virq_to_irq	16	static
+virq.c:101:5:bad_virq	8	static
+virq.c:388:12:virq_disable	16	static
+virq.c:370:12:virq_enable	16	static
+virq.c:106:6:virqs_show	40	static
+virq.c:134:5:virq_install_handler	16	static
+virq.c:156:6:virq_free_handler	8	static
+virq.c:242:5:virq_add_chip	40	static
+virq.c:416:18:arch_virq_get_irqchip	0	static

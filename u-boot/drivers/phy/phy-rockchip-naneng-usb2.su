@@ -1,0 +1,11 @@
+phy-rockchip-naneng-usb2.c:468:12:rv1126_usb2phy_tuning	0	static
+phy-rockchip-naneng-usb2.c:266:24:rockchip_usb2phy_check_vbus	16	static
+phy-rockchip-naneng-usb2.c:312:12:rockchip_usb2phy_exit	16	static
+phy-rockchip-naneng-usb2.c:289:12:rockchip_usb2phy_init	16	static
+phy-rockchip-naneng-usb2.c:349:12:rockchip_usb2phy_power_off	8	static
+phy-rockchip-naneng-usb2.c:332:12:rockchip_usb2phy_power_on	8	static
+phy-rockchip-naneng-usb2.c:417:12:rockchip_usb2phy_probe	24	static
+phy-rockchip-naneng-usb2.c:389:12:rockchip_usb2phy_bind	48	static
+phy-rockchip-naneng-usb2.c:366:12:rockchip_usb2phy_of_xlate	24	static
+phy-rockchip-naneng-usb2.c:196:5:rockchip_chg_get_type	32	static
+phy-rockchip-naneng-usb2.c:256:5:rockchip_u2phy_vbus_detect	8	static

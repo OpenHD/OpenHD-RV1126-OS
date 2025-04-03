@@ -1,0 +1,4 @@
+pinctrl-rv1126.c:338:12:rv1126_set_schmitt	8	static
+pinctrl-rv1126.c:284:12:rv1126_set_drive	8	static
+pinctrl-rv1126.c:220:12:rv1126_set_pull	16	static
+pinctrl-rv1126.c:143:12:rv1126_set_mux	48	static

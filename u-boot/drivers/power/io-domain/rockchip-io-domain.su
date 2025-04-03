@@ -1,0 +1,12 @@
+rockchip-io-domain.c:91:12:rockchip_ofdata_to_platdata	16	static
+rockchip-io-domain.c:174:12:rockchip_iodomain_write	8	static
+rockchip-io-domain.c:148:12:rv1126_iodomain_write	24	static
+rockchip-io-domain.c:107:12:rk3568_pmu_iodomain_write	16	static
+rockchip-io-domain.c:312:13:rk3399_pmu_iodomain_init	0	static
+rockchip-io-domain.c:293:13:rk3368_iodomain_init	0	static
+rockchip-io-domain.c:274:13:rk3366_iodomain_init	0	static
+rockchip-io-domain.c:255:13:rk3328_iodomain_init	0	static
+rockchip-io-domain.c:236:13:rk3308_iodomain_init	0	static
+rockchip-io-domain.c:217:13:rk3288_iodomain_init	0	static
+rockchip-io-domain.c:198:13:px30_iodomain_init	0	static
+rockchip-io-domain.c:605:12:rockchip_iodomain_probe	80	static

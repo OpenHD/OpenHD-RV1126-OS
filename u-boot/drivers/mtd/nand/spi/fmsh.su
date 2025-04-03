@@ -1,0 +1,4 @@
+fmsh.c:33:12:fm25s01a_ooblayout_ecc	0	static
+fmsh.c:56:12:fm25s01_ooblayout_ecc	0	static
+fmsh.c:68:12:fm25s01_ooblayout_free	0	static
+fmsh.c:39:12:fm25s01a_ooblayout_free	0	static

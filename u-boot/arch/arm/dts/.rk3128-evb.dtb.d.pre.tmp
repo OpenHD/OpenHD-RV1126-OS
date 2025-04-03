@@ -1,0 +1,9 @@
+.rk3128-evb.dtb.pre.o: arch/arm/dts/.rk3128-evb.dtb.pre.tmp \
+ include/linux/kconfig.h include/generated/autoconf.h \
+ arch/arm/dts/rk3128.dtsi arch/arm/dts/include/dt-bindings/gpio/gpio.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/irq.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/arm-gic.h \
+ arch/arm/dts/include/dt-bindings/pinctrl/rockchip.h \
+ arch/arm/dts/include/dt-bindings/clock/rk3128-cru.h \
+ arch/arm/dts/include/dt-bindings/media/rockchip_mipi_dsi.h \
+ arch/arm/dts/skeleton.dtsi arch/arm/dts/rk3128-u-boot.dtsi

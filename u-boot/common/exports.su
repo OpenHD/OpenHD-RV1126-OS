@@ -1,0 +1,4 @@
+delay.h:13:20:mdelay	8	static
+exports.c:8:37:dummy	0	static
+exports.c:12:15:get_version	0	static
+exports.c:26:6:jumptable_init	8	static

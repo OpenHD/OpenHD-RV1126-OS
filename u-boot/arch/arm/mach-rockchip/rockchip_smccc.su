@@ -1,0 +1,12 @@
+rockchip_smccc.c:23:29:__invoke_sip_fn_smc	56	static
+rockchip_smccc.c:34:5:psci_cpu_on	32	static
+rockchip_smccc.c:44:5:psci_system_suspend	32	static
+rockchip_smccc.c:54:5:sip_smc_set_suspend_mode	32	static
+rockchip_smccc.c:64:5:sip_smc_amp_cfg	56	static
+rockchip_smccc.c:73:22:sip_smc_dram	16	static
+rockchip_smccc.c:80:22:sip_smc_request_share_mem	16	static
+rockchip_smccc.c:97:22:sip_smc_secure_reg_read	16	static
+rockchip_smccc.c:105:5:sip_smc_secure_reg_write	32	static
+rockchip_smccc.c:113:5:sip_smc_hdcp_config	32	static
+rockchip_smccc.c:121:22:sip_smc_get_sip_version	16	static
+rockchip_smccc.c:132:5:sip_smc_set_sip_version	40	static

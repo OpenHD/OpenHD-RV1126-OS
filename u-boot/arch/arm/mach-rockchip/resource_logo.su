@@ -1,0 +1,2 @@
+resource_logo.c:16:12:read_bmp.isra.0	32	static
+resource_logo.c:75:5:resource_read_logo_bmps	152	static

@@ -1,0 +1,3 @@
+param.c:282:18:param_parse_ddr_mem	64	static
+param.c:412:5:param_parse_pre_serial	8	static
+param.c:442:5:param_parse_pubkey_fuse_programmed	8	static

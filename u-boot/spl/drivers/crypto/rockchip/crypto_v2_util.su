@@ -1,0 +1,6 @@
+crypto_v2_util.c:23:6:util_reverse_words_buff	12	static
+crypto_v2_util.c:55:6:util_reverse_buff	8	static
+crypto_v2_util.c:83:6:util_reverse_memcpy	0	static
+crypto_v2_util.c:106:6:util_word_memcpy	8	static
+crypto_v2_util.c:125:6:util_reverse_word_memcpy	0	static
+crypto_v2_util.c:148:6:util_word_memset	0	static

@@ -1,0 +1,12 @@
+.rk3399-puma-ddr1333.dtb.pre.o: \
+ arch/arm/dts/.rk3399-puma-ddr1333.dtb.pre.tmp include/linux/kconfig.h \
+ include/generated/autoconf.h arch/arm/dts/rk3399-puma.dtsi \
+ arch/arm/dts/include/dt-bindings/pwm/pwm.h arch/arm/dts/rk3399.dtsi \
+ arch/arm/dts/include/dt-bindings/clock/rk3399-cru.h \
+ arch/arm/dts/include/dt-bindings/gpio/gpio.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/arm-gic.h \
+ arch/arm/dts/include/dt-bindings/interrupt-controller/irq.h \
+ arch/arm/dts/include/dt-bindings/pinctrl/rockchip.h \
+ arch/arm/dts/include/dt-bindings/power/rk3399-power.h \
+ arch/arm/dts/include/dt-bindings/thermal/thermal.h \
+ arch/arm/dts/rk3399-sdram-ddr3-1333.dtsi

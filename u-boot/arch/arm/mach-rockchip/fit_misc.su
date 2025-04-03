@@ -1,0 +1,3 @@
+fit_misc.c:29:12:fit_image_get_uncomp_digest	24	static
+fit_misc.c:154:6:board_fit_image_post_process	64	static
+fit_misc.c:210:5:fit_board_verify_required_sigs	16	static

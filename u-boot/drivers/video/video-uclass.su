@@ -1,0 +1,10 @@
+video-uclass.c:190:12:video_pre_remove	8	static
+video-uclass.c:200:12:video_post_probe	80	static
+video-uclass.c:179:12:video_pre_probe	8	static
+video-uclass.c:265:12:video_post_bind	16	static
+video-uclass.c:48:6:video_set_flush_dcache	8	static
+video-uclass.c:73:5:video_reserve	0	static
+video-uclass.c:126:6:video_sync	8	static
+video-uclass.c:152:6:video_sync_all	16	static
+video-uclass.c:164:5:video_get_xsize	8	static
+video-uclass.c:171:5:video_get_ysize	8	static

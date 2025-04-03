@@ -1,0 +1,5 @@
+sha512.c:158:12:sha512_process	1192	static
+sha512.c:107:5:sha512_starts	0	static
+sha512.c:236:5:sha512_update	40	static
+sha512.c:281:5:sha512_finish	24	static
+sha512.c:338:6:sha512_csum	232	static

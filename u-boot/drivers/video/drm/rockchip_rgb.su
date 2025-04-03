@@ -1,0 +1,13 @@
+rockchip_rgb.c:176:12:rockchip_rgb_probe	24	static
+rockchip_rgb.c:100:13:rockchip_rgb_connector_unprepare	8	static
+rockchip_rgb.c:74:12:rockchip_rgb_connector_prepare	16	static
+rockchip_rgb.c:114:12:rockchip_rgb_connector_init	16	static
+rockchip_rgb.c:206:13:rv1126_rgb_prepare	0	static
+rockchip_rgb.c:194:13:rv1106_rgb_prepare	8	static
+rockchip_rgb.c:276:13:rk3568_rgb_prepare	0	static
+rockchip_rgb.c:266:13:rk3562_rgb_prepare	0	static
+rockchip_rgb.c:257:13:rk3368_rgb_prepare	0	static
+rockchip_rgb.c:245:13:rk3288_rgb_unprepare	0	static
+rockchip_rgb.c:236:13:rk3288_rgb_prepare	8	static
+rockchip_rgb.c:226:13:rk1808_rgb_prepare	0	static
+rockchip_rgb.c:216:13:px30_rgb_prepare	0	static

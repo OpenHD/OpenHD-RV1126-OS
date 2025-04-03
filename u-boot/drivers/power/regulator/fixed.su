@@ -1,0 +1,5 @@
+fixed.c:104:12:fixed_regulator_set_enable	24	static
+fixed.c:93:12:fixed_regulator_get_enable	8	static
+fixed.c:77:12:fixed_regulator_get_current	8	static
+fixed.c:61:12:fixed_regulator_get_value	8	static
+fixed.c:24:12:fixed_regulator_ofdata_to_platdata	24	static

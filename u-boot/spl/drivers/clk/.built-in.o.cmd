@@ -1,0 +1,1 @@
+cmd_spl/drivers/clk/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o spl/drivers/clk/built-in.o spl/drivers/clk/clk-uclass.o spl/drivers/clk/clk_fixed_rate.o spl/drivers/clk/rockchip/built-in.o spl/drivers/clk/tegra/built-in.o 

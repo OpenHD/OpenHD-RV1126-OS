@@ -1,0 +1,16 @@
+nvedit.c:214:12:_do_env_set.isra.0.constprop	72	static
+nvedit.c:75:5:get_env_id	0	static
+nvedit.c:286:5:env_set	24	static
+nvedit.c:694:5:env_set_ulong	8	static
+nvedit.c:709:5:env_set_hex	32	static
+nvedit.c:1122:5:envmatch	24	static
+nvedit.c:1039:5:env_get_f	32	static
+nvedit.c:1015:7:env_get	48	static
+nvedit.c:542:5:env_update_extract_subset	40	static
+nvedit.c:589:7:env_exist	24	static
+nvedit.c:300:12:env_append	24	static
+nvedit.c:653:5:env_delete	24	static
+nvedit.c:406:5:env_update_filter	448	static
+nvedit.c:537:5:env_update	0	static
+nvedit.c:717:7:env_get_hex	24	static
+nvedit.c:1083:7:env_get_ulong	16	static

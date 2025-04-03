@@ -1,0 +1,4 @@
+rockchip_post_csc.c:1131:13:csc_matrix_multiply	40	static
+rockchip_post_csc.c:1171:13:csc_matrix_ventor_multiply	20	static
+rockchip_post_csc.c:1188:13:csc_matrix_element_left_shift	0	static
+rockchip_post_csc.c:1555:5:rockchip_calc_post_csc	344	static

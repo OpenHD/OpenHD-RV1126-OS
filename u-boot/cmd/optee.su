@@ -1,0 +1,2 @@
+optee.c:14:5:test_secure_storage_default	496	static
+optee.c:154:5:test_secure_storage_security_partition	504	static

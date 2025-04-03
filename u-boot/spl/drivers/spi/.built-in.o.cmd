@@ -1,0 +1,1 @@
+cmd_spl/drivers/spi/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o spl/drivers/spi/built-in.o spl/drivers/spi/spi-uclass.o spl/drivers/spi/spi-mem.o spl/drivers/spi/rockchip_sfc.o 

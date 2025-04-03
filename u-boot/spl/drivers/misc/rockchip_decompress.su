@@ -1,0 +1,3 @@
+rockchip_decompress.c:191:12:rockchip_decom_ioctl	24	static
+rockchip_decompress.c:224:12:rockchip_decom_ofdata_to_platdata	16	static
+rockchip_decompress.c:237:12:rockchip_decom_probe	16	static

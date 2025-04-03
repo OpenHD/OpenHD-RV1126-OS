@@ -1,0 +1,7 @@
+sdram.c:21:8:rockchip_sdram_size	64	static
+sdram.c:143:14:get_page_size	8	static
+sdram.c:160:14:get_ddr_bw	8	static
+sdram.c:172:5:dram_init_banksize	8	static
+sdram.c:182:5:dram_init	8	static
+sdram.c:196:7:board_get_usable_ram_top	0	static
+sdram.c:203:5:rockchip_setup_ddr_param	12	static

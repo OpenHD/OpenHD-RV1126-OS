@@ -1,0 +1,2 @@
+stdlib.c:9:6:atol	16	static
+stdlib.c:36:5:atoi	0	static

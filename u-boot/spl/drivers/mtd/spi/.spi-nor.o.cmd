@@ -1,0 +1,1 @@
+cmd_spl/drivers/mtd/spi/spi-nor.o := /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o spl/drivers/mtd/spi/spi-nor.o spl/drivers/mtd/spi/sf_probe.o spl/drivers/mtd/spi/spi-nor-ids.o spl/drivers/mtd/spi/spi-nor-core.o 

@@ -1,0 +1,1 @@
+cmd_drivers/input/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o drivers/input/built-in.o drivers/input/key-uclass.o drivers/input/input.o drivers/input/key_matrix.o drivers/input/rk8xx_pwrkey.o drivers/input/adc_key.o 

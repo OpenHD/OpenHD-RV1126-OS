@@ -1,0 +1,5 @@
+rockusb.c:67:13:rkusb_fini	16	static
+rockusb.c:58:12:rkusb_erase_sector	0	static
+rockusb.c:39:12:rkusb_write_sector	16	static
+rockusb.c:154:12:do_rkusb	168	static
+rockusb.c:21:12:rkusb_read_sector	16	static

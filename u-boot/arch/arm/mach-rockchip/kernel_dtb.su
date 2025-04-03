@@ -1,0 +1,2 @@
+kernel_dtb.c:253:12:board_mmc_dm_reinit	0	static
+kernel_dtb.c:297:5:init_kernel_dtb	144	static

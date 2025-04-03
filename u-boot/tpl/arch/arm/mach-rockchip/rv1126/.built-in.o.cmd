@@ -1,0 +1,1 @@
+cmd_tpl/arch/arm/mach-rockchip/rv1126/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o tpl/arch/arm/mach-rockchip/rv1126/built-in.o tpl/arch/arm/mach-rockchip/rv1126/clk_rv1126.o tpl/arch/arm/mach-rockchip/rv1126/rv1126.o 

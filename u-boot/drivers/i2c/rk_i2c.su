@@ -1,0 +1,5 @@
+rk_i2c.c:211:12:rk_i2c_send_start_bit	24	static
+rk_i2c.c:536:12:rockchip_i2c_ofdata_to_platdata	8	static
+rk_i2c.c:551:12:rockchip_i2c_probe	16	static
+rk_i2c.c:524:5:rockchip_i2c_set_bus_speed	32	static
+rk_i2c.c:465:12:rockchip_i2c_xfer	56	static

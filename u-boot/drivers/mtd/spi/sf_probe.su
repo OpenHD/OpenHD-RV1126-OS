@@ -1,0 +1,7 @@
+sf_probe.c:111:12:spi_flash_std_write	40	static
+sf_probe.c:101:12:spi_flash_std_read	40	static
+sf_probe.c:139:12:spi_flash_std_get_sw_write_prot	8	static
+sf_probe.c:121:12:spi_flash_std_erase	96	static
+sf_probe.c:174:12:spi_flash_std_remove	8	static
+sf_probe.c:161:12:spi_flash_std_probe	16	static
+sf_probe.c:146:12:spi_flash_std_bind	32	static

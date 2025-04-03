@@ -1,0 +1,2 @@
+hotkey.c:26:6:is_hotkey	0	static
+hotkey.c:52:6:hotkey_run	8	static

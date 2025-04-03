@@ -1,0 +1,1 @@
+cmd_drivers/usb/dwc3/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o drivers/usb/dwc3/built-in.o drivers/usb/dwc3/dwc3.o drivers/usb/dwc3/gadget.o drivers/usb/dwc3/ep0.o drivers/usb/dwc3/dwc3-generic.o 

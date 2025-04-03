@@ -1,0 +1,7 @@
+key-uclass.c:272:12:key_post_probe	24	static
+key-uclass.c:32:10:key_timer	16	static
+key-uclass.c:208:13:gpio_irq_handler	16	static
+key-uclass.c:104:5:key_is_pressed	0	static
+key-uclass.c:128:5:key_read	48	static
+key-uclass.c:166:5:key_exist	16	static
+key-uclass.c:242:5:key_bind_children	40	static

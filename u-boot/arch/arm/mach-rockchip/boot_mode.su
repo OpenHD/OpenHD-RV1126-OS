@@ -1,0 +1,4 @@
+boot_mode.c:21:12:misc_require_recovery	144	static
+boot_mode.c:59:5:get_bcb_recovery_msg	16	static
+boot_mode.c:84:5:rockchip_get_boot_mode	24	static
+boot_mode.c:226:5:setup_boot_mode	264	static

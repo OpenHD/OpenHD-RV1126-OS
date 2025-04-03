@@ -1,0 +1,2 @@
+rv1126.c:372:6:board_debug_uart_init	0	static
+rv1126.c:744:5:spl_fit_standalone_release	16	static

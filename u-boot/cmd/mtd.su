@@ -1,0 +1,5 @@
+mtd.c:83:13:mtd_show_parts	48	static
+mtd.c:33:13:mtd_dump_buf	32	static
+mtd.c:16:13:mtd_len_to_pages.isra.1	24	static
+mtd.c:28:13:mtd_is_aligned_with_block_size.isra.2	24	static
+mtd.c:222:12:do_mtd	192	static

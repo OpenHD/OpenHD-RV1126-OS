@@ -1,0 +1,11 @@
+xtx.c:31:12:xt26g0xa_ooblayout_ecc	0	static
+xtx.c:43:12:xt26g0xa_ooblayout_free	0	static
+xtx.c:60:12:xt26g01b_ooblayout_ecc	0	static
+xtx.c:66:12:xt26g01b_ooblayout_free	0	static
+xtx.c:83:12:xt26g02b_ooblayout_ecc	0	static
+xtx.c:95:12:xt26g02b_ooblayout_free	0	static
+xtx.c:112:12:xt26g01c_ooblayout_ecc	0	static
+xtx.c:124:12:xt26g01c_ooblayout_free	0	static
+xtx.c:152:12:xt26g0xa_ecc_get_status	0	static
+xtx.c:176:12:xt26g02b_ecc_get_status	0	static
+xtx.c:197:12:xt26g01c_ecc_get_status	0	static

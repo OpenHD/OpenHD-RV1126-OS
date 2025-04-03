@@ -1,0 +1,2 @@
+hexdump.c:235:6:print_hex_dump	0	static
+hexdump.c:241:6:print_hex_dump_bytes	0	static

@@ -1,0 +1,2 @@
+sf.c:72:14:bytes_per_second	8	static
+sf.c:559:12:do_spi_flash	120	static

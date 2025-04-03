@@ -1,0 +1,11 @@
+tpl.c:27:6:putc	8	static
+tpl.c:21:6:puts	8	static
+tpl.c:37:12:timer_init	0	static
+tpl.c:60:13:__udelay	20	static
+tpl.c:79:6:udelay	0	static
+tpl.c:84:6:hang	8	static
+tpl.c:92:5:spl_boot_device	0	static
+tpl.c:97:13:rockchip_stimer_init	0	static
+tpl.c:117:12:arch_cpu_init	0	static
+tpl.c:122:6:board_init_f	8	static
+tpl.c:174:6:board_init_r	0	static

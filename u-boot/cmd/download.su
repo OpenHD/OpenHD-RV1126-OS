@@ -1,0 +1,2 @@
+download.c:11:13:do_board_download	0	static
+download.c:15:12:do_download	8	static

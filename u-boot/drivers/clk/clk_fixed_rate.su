@@ -1,0 +1,2 @@
+clk_fixed_rate.c:29:12:clk_fixed_rate_ofdata_to_platdata	16	static
+clk_fixed_rate.c:17:14:clk_fixed_rate_get_rate	8	static

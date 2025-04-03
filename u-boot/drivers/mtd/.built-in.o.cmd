@@ -1,0 +1,1 @@
+cmd_drivers/mtd/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o drivers/mtd/built-in.o drivers/mtd/mtdcore.o drivers/mtd/mtd_uboot.o drivers/mtd/mtd-uclass.o drivers/mtd/mtd_blk.o drivers/mtd/mtdpart.o drivers/mtd/nand/built-in.o 

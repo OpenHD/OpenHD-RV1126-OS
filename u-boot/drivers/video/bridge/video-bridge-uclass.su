@@ -1,0 +1,7 @@
+video-bridge-uclass.c:67:12:video_bridge_pre_probe	24	static
+video-bridge-uclass.c:14:5:video_bridge_set_backlight	0	static
+video-bridge-uclass.c:24:5:video_bridge_attach	0	static
+video-bridge-uclass.c:34:5:video_bridge_check_attached	16	static
+video-bridge-uclass.c:49:5:video_bridge_read_edid	0	static
+video-bridge-uclass.c:58:5:video_bridge_get_timing	0	static
+video-bridge-uclass.c:116:5:video_bridge_set_active	16	static

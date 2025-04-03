@@ -1,0 +1,3 @@
+etron.c:30:12:em73c044vcf_oh_ooblayout_ecc	0	static
+etron.c:42:12:em73c044vcf_oh_ooblayout_free	0	static
+etron.c:59:12:em73c044vcf_oh_ecc_get_status	0	static

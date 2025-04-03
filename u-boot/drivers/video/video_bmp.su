@@ -1,0 +1,2 @@
+video_bmp.c:131:13:fb_put_byte	0	static
+video_bmp.c:192:5:video_bmp_display	72	static

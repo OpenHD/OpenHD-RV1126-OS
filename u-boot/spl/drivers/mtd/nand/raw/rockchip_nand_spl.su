@@ -1,0 +1,11 @@
+rockchip_nand_spl.c:98:13:rockchip_nand_wait_dev_ready	16	static
+rockchip_nand_spl.c:408:12:rockchip_nandc_bind	32	static
+rockchip_nand_spl.c:309:12:rockchip_nandc_probe	40	static
+rockchip_nand_spl.c:176:12:nandc_read_page	48	static
+rockchip_nand_spl.c:271:12:spl_nand_read_page	40	static
+rockchip_nand_spl.c:266:12:spl_nand_block_isbad	24	static
+rockchip_nand_spl.c:432:6:board_nand_init	16	static
+rockchip_nand_spl.c:445:5:nand_spl_load_image	0	static
+rockchip_nand_spl.c:450:6:nand_init	0	static
+rockchip_nand_spl.c:452:5:rk_nand_init	0	static
+rockchip_nand_spl.c:576:6:nand_deselect	0	static

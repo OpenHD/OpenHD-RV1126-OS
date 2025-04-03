@@ -1,0 +1,4 @@
+console_normal.c:17:12:console_normal_set_row	16	static
+console_normal.c:74:12:console_normal_putc_xy	32	static
+console_normal.c:136:12:console_normal_probe	16	static
+console_normal.c:60:12:console_normal_move_rows	16	static

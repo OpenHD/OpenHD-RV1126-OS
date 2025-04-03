@@ -1,0 +1,2 @@
+crypto_sum.c:9:13:dump_hash	16	static
+crypto_sum.c:23:12:do_crypto_csum	296	static

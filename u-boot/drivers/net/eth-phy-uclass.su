@@ -1,0 +1,4 @@
+eth-phy-uclass.c:17:5:eth_phy_binds_nodes	32	static
+eth-phy-uclass.c:49:5:eth_phy_set_mdio_bus	24	static
+eth-phy-uclass.c:67:17:eth_phy_get_mdio_bus	24	static
+eth-phy-uclass.c:97:5:eth_phy_get_addr	88	static

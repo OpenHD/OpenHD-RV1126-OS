@@ -1,0 +1,5 @@
+rk_pwm.c:40:12:rk_pwm_set_invert	8	static
+rk_pwm.c:112:12:rk_pwm_set_enable	16	static
+rk_pwm.c:58:12:rk_pwm_set_config	48	static
+rk_pwm.c:138:12:rk_pwm_ofdata_to_platdata	16	static
+rk_pwm.c:147:12:rk_pwm_probe	24	static

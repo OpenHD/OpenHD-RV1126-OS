@@ -1,0 +1,1 @@
+cmd_u-boot-dtb.img := ./tools/mkimage -f auto -A arm -T firmware -C none -O u-boot -a 0x00600000 -e 0 -n "U-Boot 2017.09"" for evb_rv1126 board" -E -b arch/arm/dts/rv1126-evb.dtb -d u-boot-nodtb.bin u-boot-dtb.img  >/dev/null

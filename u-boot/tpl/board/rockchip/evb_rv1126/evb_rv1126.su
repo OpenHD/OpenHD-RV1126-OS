@@ -1,0 +1,2 @@
+evb_rv1126.c:23:5:usb_gadget_handle_interrupts	8	static
+evb_rv1126.c:29:5:board_usb_init	0	static

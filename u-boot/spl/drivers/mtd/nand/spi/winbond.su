@@ -1,0 +1,7 @@
+winbond.c:36:12:w25m02gv_ooblayout_ecc	0	static
+winbond.c:48:12:w25m02gv_ooblayout_free	0	static
+winbond.c:79:12:w25n02kv_ooblayout_ecc	0	static
+winbond.c:91:12:w25n02kv_ooblayout_free	0	static
+winbond.c:109:12:w25n02kv_ecc_get_status	0	static
+winbond.c:215:12:winbond_spinand_init	16	static
+winbond.c:65:12:w25m02gv_select_target	64	static

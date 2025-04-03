@@ -1,0 +1,2 @@
+bootrkp.c:168:12:read_rockchip_image	24	static
+bootrkp.c:302:12:do_boot_rockchip	272	static

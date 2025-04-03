@@ -1,0 +1,17 @@
+rockchip_nand.c:114:13:rockchip_nand_select_chip	12	static
+rockchip_nand.c:141:13:rockchip_nand_cmd_ctrl	12	static
+rockchip_nand.c:162:13:rockchip_nand_read_buf	8	static
+rockchip_nand.c:176:13:rockchip_nand_write_buf	8	static
+rockchip_nand.c:190:16:rockchip_nand_read_byte	16	static
+rockchip_nand.c:199:12:rockchip_nand_dev_ready	0	static
+rockchip_nand.c:210:12:rockchip_nand_hw_ecc_setup	8	static
+rockchip_nand.c:243:13:rockchip_nand_pio_xfer_start	8	static
+rockchip_nand.c:692:12:rockchip_nandc_bind	32	static
+rockchip_nand.c:658:12:rockchip_nandc_probe	40	static
+rockchip_nand.c:263:12:rockchip_nand_wait_pio_xfer_done.isra.2	16	static
+rockchip_nand.c:313:12:rockchip_nand_hw_syndrome_pio_read_page	56	static
+rockchip_nand.c:541:12:rockchip_nand_block_bad	32	static
+rockchip_nand.c:388:12:rockchip_nand_hw_syndrome_pio_write_page	56	static
+rockchip_nand.c:716:6:board_nand_init	16	static
+rockchip_nand.c:778:5:nand_spl_load_image	56	static
+rockchip_nand.c:787:6:nand_deselect	0	static

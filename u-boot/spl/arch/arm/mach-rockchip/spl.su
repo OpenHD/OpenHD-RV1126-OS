@@ -1,0 +1,15 @@
+spl.c:30:6:board_return_to_bootrom	0	static
+spl.c:38:13:board_spl_was_booted_from	0	static
+spl.c:56:5:spl_boot_device	0	static
+spl.c:71:5:spl_boot_mode	0	static
+spl.c:76:13:rockchip_stimer_init	0	static
+spl.c:92:12:arch_cpu_init	0	static
+spl.c:97:12:rk_board_init_f	0	static
+spl.c:152:6:board_init_f	8	static
+spl.c:207:5:board_fit_config_name_match	0	static
+spl.c:216:5:board_init_f_boot_flags	8	static
+spl.c:261:12:rk_spl_board_init	0	static
+spl.c:289:6:spl_board_init	0	static
+spl.c:308:6:spl_perform_fixups	0	static
+spl.c:416:6:spl_hang_reset	8	static
+spl.c:511:5:spl_board_prepare_for_jump	8	static

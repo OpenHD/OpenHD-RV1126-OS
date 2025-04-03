@@ -1,0 +1,5 @@
+spl_mmc.c:50:14:h_spl_load_read	0	static
+spl_mmc.c:57:5:mmc_load_image_raw_sector	40	static
+spl_mmc.c:124:5:spl_mmc_find_device	16	static
+spl_mmc.c:282:5:spl_mmc_load_image	144	static
+spl_mmc.c:222:5:spl_start_uboot	0	static

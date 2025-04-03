@@ -1,0 +1,3 @@
+common.c:25:18:usb_get_dr_mode	16	static
+common.c:52:23:usb_get_maximum_speed	16	static
+common.c:77:24:usb_get_phy_mode	16	static

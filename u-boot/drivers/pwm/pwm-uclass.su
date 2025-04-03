@@ -1,0 +1,3 @@
+pwm-uclass.c:12:5:pwm_set_invert	0	static
+pwm-uclass.c:22:5:pwm_set_config	4	static
+pwm-uclass.c:33:5:pwm_set_enable	0	static

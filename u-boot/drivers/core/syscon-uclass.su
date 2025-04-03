@@ -1,0 +1,6 @@
+syscon-uclass.c:28:12:syscon_pre_probe	8	static
+syscon-uclass.c:18:16:syscon_get_regmap	8	static
+syscon-uclass.c:48:16:syscon_regmap_lookup_by_phandle	16	static
+syscon-uclass.c:67:5:syscon_get_by_driver_data	24	static
+syscon-uclass.c:87:16:syscon_get_regmap_by_driver_data	16	static
+syscon-uclass.c:101:7:syscon_get_first_range	8	static

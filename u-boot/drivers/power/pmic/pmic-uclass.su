@@ -1,0 +1,11 @@
+pmic-uclass.c:23:5:pmic_bind_children	48	static
+pmic-uclass.c:114:5:pmic_get	0	static
+pmic-uclass.c:119:5:pmic_reg_count	8	static
+pmic-uclass.c:129:5:pmic_read	24	static
+pmic-uclass.c:142:5:pmic_write	24	static
+pmic-uclass.c:155:5:pmic_reg_read	16	static
+pmic-uclass.c:167:5:pmic_reg_write	16	static
+pmic-uclass.c:179:5:pmic_clrsetbits	24	static
+pmic-uclass.c:192:5:pmic_suspend	8	static
+pmic-uclass.c:202:5:pmic_resume	8	static
+pmic-uclass.c:212:5:pmic_shutdown	8	static

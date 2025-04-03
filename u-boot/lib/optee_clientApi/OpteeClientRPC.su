@@ -1,0 +1,11 @@
+OpteeClientRPC.c:29:13:OpteeRpcAlloc	16	static
+OpteeClientRPC.c:51:13:OpteeRpcFree	8	static
+OpteeClientRPC.c:57:5:is_uuid_equal	24	static
+OpteeClientRPC.c:81:13:OpteeRpcCmdLoadTa	48	static
+OpteeClientRPC.c:152:13:OpteeRpcCmdLoadV2Ta	24	static
+OpteeClientRPC.c:198:13:OpteeRpcCmdFreeTa	8	static
+OpteeClientRPC.c:240:13:OpteeRpcCmdRpmb	32	static
+OpteeClientRPC.c:512:13:OpteeRpcCmdFs	8	static
+OpteeClientRPC.c:534:13:OpteeRpcCmdGetTime	0	static
+OpteeClientRPC.c:542:13:OpteeRpcCmdWaitMutex	0	static
+OpteeClientRPC.c:550:13:OpteeRpcCallback	32	static

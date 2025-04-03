@@ -1,0 +1,8 @@
+interrupts.c:52:6:bad_mode	8	static
+interrupts.c:58:6:show_regs	152	static
+interrupts.c:119:6:do_undefined_instruction	8	static
+interrupts.c:128:6:do_software_interrupt	8	static
+interrupts.c:137:6:do_prefetch_abort	8	static
+interrupts.c:146:6:do_data_abort	8	static
+interrupts.c:155:6:do_not_used	8	static
+interrupts.c:164:6:do_fiq	8	static

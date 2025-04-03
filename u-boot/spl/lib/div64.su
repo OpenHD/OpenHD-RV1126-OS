@@ -1,0 +1,6 @@
+div64.c:28:32:__div64_32	40	static
+div64.c:64:5:div_s64_rem	48	static
+div64.c:95:5:div64_u64_rem	56	static
+div64.c:135:5:div64_u64	56	static
+div64.c:163:5:div64_s64	24	static
+div64.c:181:5:iter_div_u64_rem	12	static

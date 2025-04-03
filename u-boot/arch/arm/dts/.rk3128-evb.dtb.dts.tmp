@@ -1,0 +1,1526 @@
+# 1 "arch/arm/dts/.rk3128-evb.dtb.pre.tmp"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "././include/linux/kconfig.h" 1
+
+
+
+# 1 "include/generated/autoconf.h" 1
+# 5 "././include/linux/kconfig.h" 2
+# 1 "<command-line>" 2
+# 1 "arch/arm/dts/.rk3128-evb.dtb.pre.tmp"
+
+
+
+
+
+
+/dts-v1/;
+
+# 1 "arch/arm/dts/rk3128.dtsi" 1
+
+
+
+
+
+
+# 1 "./arch/arm/dts/include/dt-bindings/gpio/gpio.h" 1
+# 8 "arch/arm/dts/rk3128.dtsi" 2
+# 1 "./arch/arm/dts/include/dt-bindings/interrupt-controller/irq.h" 1
+# 9 "arch/arm/dts/rk3128.dtsi" 2
+# 1 "./arch/arm/dts/include/dt-bindings/interrupt-controller/arm-gic.h" 1
+# 10 "arch/arm/dts/rk3128.dtsi" 2
+# 1 "./arch/arm/dts/include/dt-bindings/pinctrl/rockchip.h" 1
+# 11 "arch/arm/dts/rk3128.dtsi" 2
+# 1 "./arch/arm/dts/include/dt-bindings/clock/rk3128-cru.h" 1
+# 12 "arch/arm/dts/rk3128.dtsi" 2
+# 1 "./arch/arm/dts/include/dt-bindings/media/rockchip_mipi_dsi.h" 1
+# 13 "arch/arm/dts/rk3128.dtsi" 2
+# 1 "arch/arm/dts/skeleton.dtsi" 1
+
+
+
+
+
+
+/ {
+ #address-cells = <1>;
+ #size-cells = <1>;
+ chosen { };
+ aliases { };
+ memory { device_type = "memory"; reg = <0 0>; };
+};
+# 14 "arch/arm/dts/rk3128.dtsi" 2
+
+/ {
+ compatible = "rockchip,rk3128";
+ rockchip,sram = <&sram>;
+ interrupt-parent = <&gic>;
+ #address-cells = <1>;
+ #size-cells = <1>;
+
+ aliases {
+  gpio0 = &gpio0;
+  gpio1 = &gpio1;
+  gpio2 = &gpio2;
+  gpio3 = &gpio3;
+  i2c0 = &i2c0;
+  i2c1 = &i2c1;
+  i2c2 = &i2c2;
+  i2c3 = &i2c3;
+  spi0 = &spi0;
+  serial0 = &uart0;
+  serial1 = &uart1;
+  serial2 = &uart2;
+  mmc0 = &emmc;
+  mmc1 = &sdmmc;
+ };
+
+ memory {
+  device_type = "memory";
+  reg = <0x60000000 0x40000000>;
+ };
+
+        arm-pmu {
+                compatible = "arm,cortex-a7-pmu";
+                interrupts = <0 76 4>,
+                             <0 77 4>,
+        <0 78 4>,
+        <0 79 4>;
+        };
+
+ cpus {
+  #address-cells = <1>;
+  #size-cells = <0>;
+  enable-method = "rockchip,rk3128-smp";
+
+  cpu0:cpu@0x000 {
+   device_type = "cpu";
+   compatible = "arm,cortex-a7";
+   reg = <0x000>;
+   operating-points = <
+
+     816000 1000000
+   >;
+   #cooling-cells = <2>;
+   clock-latency = <40000>;
+   clocks = <&cru 5>;
+  };
+
+  cpu1:cpu@0x001 {
+   device_type = "cpu";
+   compatible = "arm,cortex-a7";
+   reg = <0x001>;
+  };
+
+  cpu2:cpu@0x002 {
+   device_type = "cpu";
+   compatible = "arm,cortex-a7";
+   reg = <0x002>;
+  };
+
+  cpu3:cpu@0x003 {
+   device_type = "cpu";
+   compatible = "arm,cortex-a7";
+   reg = <0x003>;
+  };
+ };
+
+ cpu_axi_bus: cpu_axi_bus {
+  compatible = "rockchip,cpu_axi_bus";
+  #address-cells = <1>;
+  #size-cells = <1>;
+  ranges;
+
+  qos {
+   #address-cells = <1>;
+   #size-cells = <1>;
+   ranges;
+
+   crypto {
+    reg = <0x10128080 0x20>;
+   };
+
+   core {
+    reg = <0x1012a000 0x20>;
+   };
+
+   peri {
+    reg = <0x1012c000 0x20>;
+   };
+
+   gpu {
+    reg = <0x1012d000 0x20>;
+   };
+
+   vpu {
+    reg = <0x1012e000 0x20>;
+   };
+
+   rga {
+    reg = <0x1012f000 0x20>;
+   };
+   ebc {
+    reg = <0x1012f080 0x20>;
+   };
+
+   iep {
+    reg = <0x1012f100 0x20>;
+   };
+
+   lcdc {
+    reg = <0x1012f180 0x20>;
+    rockchip,priority = <3 3>;
+   };
+
+   vip {
+    reg = <0x1012f200 0x20>;
+    rockchip,priority = <3 3>;
+   };
+  };
+
+  msch {
+   #address-cells = <1>;
+   #size-cells = <1>;
+   ranges;
+
+   msch@10128000 {
+    reg = <0x10128000 0x20>;
+    rockchip,read-latency = <0x3f>;
+   };
+  };
+ };
+
+ psci: psci {
+  compatible = "arm,psci-1.0";
+  method = "smc";
+ };
+
+ amba {
+  compatible = "arm,amba-bus";
+  #address-cells = <1>;
+  #size-cells = <1>;
+  interrupt-parent = <&gic>;
+  ranges;
+
+                pdma: pdma@20078000 {
+                        compatible = "arm,pl330", "arm,primecell";
+                        reg = <0x20078000 0x4000>;
+                        arm,pl330-broken-no-flushp;
+                        interrupts = <0 0 4>,
+                                     <0 1 4>;
+                        #dma-cells = <1>;
+   clocks = <&cru 194>;
+                        clock-names = "apb_pclk";
+                };
+ };
+
+ xin24m: xin24m {
+  compatible = "fixed-clock";
+  clock-frequency = <24000000>;
+  clock-output-names = "xin24m";
+  #clock-cells = <0>;
+ };
+
+ xin12m: xin12m {
+  compatible = "fixed-clock";
+  clocks = <&xin24m>;
+  clock-frequency = <12000000>;
+  clock-output-names = "xin12m";
+  #clock-cells = <0>;
+ };
+
+
+ timer {
+  compatible = "arm,armv7-timer";
+  arm,cpu-registers-not-fw-configured;
+  interrupts = <1 13 ((((1 << (4)) - 1) << 8) | 4)>,
+        <1 14 ((((1 << (4)) - 1) << 8) | 4)>;
+  clock-frequency = <24000000>;
+ };
+
+ timer@20044000 {
+  compatible = "arm,armv7-timer";
+  reg = <0x20044000 0xb8>;
+  interrupts = <0 28 4>;
+  rockchip,broadcast = <1>;
+ };
+
+ watchdog: wdt@2004c000 {
+  compatible = "rockchip,watch dog";
+  reg = <0x2004c000 0x100>;
+  clock-names = "pclk_wdt";
+  interrupts = <0 34 4>;
+  rockchip,irq = <1>;
+  rockchip,timeout = <60>;
+  rockchip,atboot = <1>;
+  rockchip,debug = <0>;
+ };
+
+ reset: reset@20000110 {
+  compatible = "rockchip,reset";
+  reg = <0x20000110 0x24>;
+  #reset-cells = <1>;
+ };
+ nandc: nandc@10500000 {
+  compatible = "rockchip,rk-nandc";
+  reg = <0x10500000 0x4000>;
+  interrupts = <0 18 4>;
+  nandc_id = <0>;
+  clocks = <&cru 67>, <&cru 453>;
+  clock-names = "clk_nandc", "hclk_nandc";
+  status = "disabled";
+ };
+
+ dmc: dmc@20004000 {
+  compatible = "rockchip,rk3128-dmc", "syscon";
+  reg = <0x0 0x20004000 0x0 0x1000>;
+ };
+
+ cru: clock-controller@20000000 {
+  compatible = "rockchip,rk3128-cru";
+  reg = <0x20000000 0x1000>;
+  rockchip,grf = <&grf>;
+  #clock-cells = <1>;
+  #reset-cells = <1>;
+  assigned-clocks = <&cru 4>;
+  assigned-clock-rates = <594000000>;
+ };
+
+ uart0: serial0@20060000 {
+  compatible = "rockchip,rk3128-uart", "snps,dw-apb-uart";
+  reg = <0x20060000 0x100>;
+  interrupts = <0 20 4>;
+  reg-shift = <2>;
+  reg-io-width = <4>;
+  clock-frequency = <24000000>;
+  clocks = <&cru 77>, <&cru 341>;
+  clock-names = "baudclk", "apb_pclk";
+  pinctrl-names = "default";
+  pinctrl-0 = <&uart0_xfer &uart0_cts &uart0_rts>;
+  dmas = <&pdma 2>, <&pdma 3>;
+  #dma-cells = <2>;
+ };
+
+ uart1: serial1@20064000 {
+  compatible = "rockchip,rk3128-uart", "snps,dw-apb-uart";
+  reg = <0x20064000 0x100>;
+  interrupts = <0 21 4>;
+  reg-shift = <2>;
+  reg-io-width = <4>;
+  clock-frequency = <24000000>;
+  clocks = <&cru 78>, <&cru 342>;
+  clock-names = "baudclk", "apb_pclk";
+  pinctrl-names = "default";
+  pinctrl-0 = <&uart1_xfer>;
+  dmas = <&pdma 4>, <&pdma 5>;
+  #dma-cells = <2>;
+ };
+
+ uart2: serial2@20068000 {
+  compatible = "rockchip,rk3128-uart", "snps,dw-apb-uart";
+  reg = <0x20068000 0x100>;
+  interrupts = <0 22 4>;
+  reg-shift = <2>;
+  reg-io-width = <4>;
+  clock-frequency = <24000000>;
+  clocks = <&cru 79>, <&cru 343>;
+  clock-names = "baudclk", "apb_pclk";
+  pinctrl-names = "default";
+  pinctrl-0 = <&uart2_xfer>;
+  dmas = <&pdma 6>, <&pdma 7>;
+  #dma-cells = <2>;
+ };
+
+ saradc: saradc@2006c000 {
+  compatible = "rockchip,saradc";
+  reg = <0x2006c000 0x100>;
+  interrupts = <0 17 4>;
+  #io-channel-cells = <1>;
+  clocks = <&cru 91>, <&cru 318>;
+  clock-names = "saradc", "apb_pclk";
+  resets = <&cru 87>;
+  reset-names = "saradc-apb";
+  status = "disabled";
+ };
+
+ pwm0: pwm0@20050000 {
+  compatible = "rockchip,rk3128-pwm", "rockchip,rk3288-pwm";
+  reg = <0x20050000 0x10>;
+  #pwm-cells = <3>;
+  pinctrl-names = "active";
+  pinctrl-0 = <&pwm0_pin>;
+  clocks = <&cru 350>;
+  clock-names = "pwm";
+ };
+
+ pwm1: pwm1@20050010 {
+  compatible = "rockchip,rk3128-pwm", "rockchip,rk3288-pwm";
+  reg = <0x20050010 0x10>;
+  #pwm-cells = <2>;
+  pinctrl-names = "active";
+  pinctrl-0 = <&pwm1_pin>;
+  clocks = <&cru 350>;
+  clock-names = "pwm";
+ };
+
+ pwm2: pwm2@20050020 {
+  compatible = "rockchip,rk3128-pwm", "rockchip,rk3288-pwm";
+  reg = <0x20050020 0x10>;
+  #pwm-cells = <2>;
+  pinctrl-names = "active";
+  pinctrl-0 = <&pwm2_pin>;
+  clocks = <&cru 350>;
+  clock-names = "pwm";
+ };
+
+ pwm3: pwm3@20050030 {
+  compatible = "rockchip,rk3128-pwm", "rockchip,rk3288-pwm";
+  reg = <0x20050030 0x10>;
+  #pwm-cells = <2>;
+  pinctrl-names = "active";
+  pinctrl-0 = <&pwm3_pin>;
+  clocks = <&cru 350>;
+  clock-names = "pwm";
+ };
+
+ sram: sram@10080400 {
+  compatible = "rockchip,rk3128-smp-sram", "mmio-sram";
+  reg = <0x10080400 0x1C00>;
+  map-exec;
+  map-cacheable;
+ };
+
+ pmu: syscon@100a0000 {
+  compatible = "rockchip,rk3128-pmu", "syscon", "simple-mfd";
+  reg = <0x100a0000 0x1000>;
+  #address-cells = <1>;
+  #size-cells = <1>;
+ };
+
+ vop: vop@1010e000 {
+  compatible = "rockchip,rk3126-vop";
+  reg = <0x1010e000 0x100>, <0x1010ec00 0x400>;
+  reg-names = "regs", "gamma_lut";
+  interrupts = <0 9 4>;
+  clocks = <&cru 204>, <&cru 190>, <&cru 463>;
+  clock-names = "aclk_vop", "dclk_vop", "hclk_vop";
+  status = "disabled";
+
+  vop_out: port {
+   #address-cells = <1>;
+   #size-cells = <0>;
+
+   vop_out_lvds: endpoint@0 {
+    reg = <0>;
+    remote-endpoint = <&lvds_in_vop>;
+   };
+
+   vop_out_dsi: endpoint@1 {
+    reg = <1>;
+    remote-endpoint = <&dsi_in_vop>;
+   };
+
+   vop_out_rgb: endpoint@2 {
+    reg = <2>;
+    remote-endpoint = <&rgb_in_vop>;
+   };
+  };
+ };
+
+ dsi: dsi@10110000 {
+  compatible = "rockchip,rk3128-mipi-dsi";
+  reg = <0x10110000 0x4000>;
+  interrupts = <0 33 4>;
+  clocks = <&cru 325>, <&cru 469>, <&video_phy>;
+  clock-names = "pclk", "h2p", "hs_clk";
+  resets = <&cru 137>;
+  reset-names = "apb";
+  phys = <&video_phy>;
+  phy-names = "mipi_dphy";
+  rockchip,grf = <&grf>;
+  #address-cells = <1>;
+  #size-cells = <0>;
+  status = "disabled";
+
+  ports {
+   port {
+    dsi_in_vop: endpoint {
+     remote-endpoint = <&vop_out_dsi>;
+    };
+   };
+  };
+ };
+
+ display_subsystem: display-subsystem {
+  compatible = "rockchip,display-subsystem";
+  ports = <&vop_out>;
+
+  route {
+   route_lvds: route-lvds {
+    logo,uboot = "logo.bmp";
+    logo,kernel = "logo_kernel.bmp";
+    logo,mode = "fullscreen";
+    charge_logo,mode = "center";
+    connect = <&vop_out_lvds>;
+   };
+
+   route_dsi: route-dsi {
+    logo,uboot = "logo.bmp";
+    logo,kernel = "logo_kernel.bmp";
+    logo,mode = "fullscreen";
+    charge_logo,mode = "center";
+    connect = <&vop_out_dsi>;
+   };
+  };
+ };
+
+ gic: interrupt-controller@10139000 {
+  compatible = "arm,gic-400";
+  interrupt-controller;
+  #interrupt-cells = <3>;
+  #address-cells = <0>;
+  reg = <0x10139000 0x1000>,
+        <0x1013a000 0x1000>,
+        <0x1013c000 0x2000>,
+        <0x1013e000 0x2000>;
+  interrupts = <1 9 0xf04>;
+ };
+
+ usb_otg: usb@10180000 {
+  compatible = "rockchip,rk3128-usb", "rockchip,rk3288-usb",
+        "snps,dwc2";
+  reg = <0x10180000 0x40000>;
+  interrupts = <0 10 4>;
+  dr_mode = "otg";
+  g-use-dma;
+  hnp-srp-disable;
+  phys = <&u2phy_otg>;
+  phy-names = "usb";
+  status = "disabled";
+ };
+
+ usb_host_ehci: usb@101c0000 {
+  compatible = "generic-ehci";
+  reg = <0x101c0000 0x20000>;
+  interrupts = <0 11 4>;
+  phys = <&u2phy_host>;
+  phy-names = "usb";
+  status = "disabled";
+ };
+
+ usb_host_ohci: usb@101e0000 {
+  compatible = "generic-ohci";
+  reg = <0x101e0000 0x20000>;
+  interrupts = <0 32 4>;
+  phys = <&u2phy_host>;
+  phy-names = "usb";
+  status = "disabled";
+ };
+
+ sdmmc: dwmmc@10214000 {
+  compatible = "rockchip,rk312x-dw-mshc", "rockchip,rk3288-dw-mshc";
+  reg = <0x10214000 0x4000>;
+  max-frequency = <150000000>;
+  interrupts = <0 14 4>;
+  clocks = <&cru 456>, <&cru 68>,
+    <&cru 114>, <&cru 118>;
+  clock-names = "biu", "ciu", "ciu-drv", "ciu-sample";
+  fifo-depth = <0x100>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_bus4>;
+  bus-width = <4>;
+  status = "disabled";
+ };
+
+ emmc: dwmmc@1021c000 {
+  compatible = "rockchip,rk3128-dw-mshc", "rockchip,rk3288-dw-mshc";
+  reg = <0x1021c000 0x4000>;
+  max-frequency = <150000000>;
+  interrupts = <0 16 4>;
+  clocks = <&cru 459>, <&cru 71>,
+    <&cru 117>, <&cru 121>;
+  clock-names = "biu", "ciu", "ciu-drv", "ciu-sample";
+  bus-width = <8>;
+  default-sample-phase = <158>;
+  num-slots = <1>;
+  fifo-depth = <0x100>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&emmc_clk &emmc_cmd &emmc_bus8>;
+  resets = <&cru 83>;
+  reset-names = "reset";
+  status = "disabled";
+ };
+
+ video_phy: video-phy@20038000 {
+  compatible = "rockchip,rk3128-video-phy";
+  reg = <0x20038000 0x4000>, <0x10110000 0x4000>;
+  clocks = <&cru 148>, <&cru 370>,
+    <&cru 325>;
+  clock-names = "ref", "pclk_phy", "pclk_host";
+  #clock-cells = <0>;
+  resets = <&cru 36>;
+  reset-names = "rst";
+  #phy-cells = <0>;
+  status = "disabled";
+ };
+
+ i2c0: i2c0@20072000 {
+  compatible = "rockchip,rk3128-i2c", "rockchip,rk3288-i2c";
+  reg = <0x20072000 0x1000>;
+  interrupts = <0 24 4>;
+  #address-cells = <1>;
+  #size-cells = <0>;
+  clock-names = "i2c";
+  clocks = <&cru 332>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&i2c0_xfer>;
+ };
+
+ i2c1: i2c1@20056000 {
+  compatible = "rockchip,rk3128-i2c", "rockchip,rk3288-i2c";
+  reg = <0x20056000 0x1000>;
+  interrupts = <0 25 4>;
+  #address-cells = <1>;
+  #size-cells = <0>;
+  clock-names = "i2c";
+  clocks = <&cru 333>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&i2c1_xfer>;
+ };
+
+ i2c2: i2c2@2005a000 {
+  compatible = "rockchip,rk3128-i2c", "rockchip,rk3288-i2c";
+  reg = <0x2005a000 0x1000>;
+  interrupts = <0 26 4>;
+  #address-cells = <1>;
+  #size-cells = <0>;
+  clock-names = "i2c";
+  clocks = <&cru 334>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&i2c2_xfer>;
+ };
+
+ i2c3: i2c3@2005e000 {
+  compatible = "rockchip,rk3128-i2c", "rockchip,rk3288-i2c";
+  reg = <0x2005e000 0x1000>;
+  interrupts = <0 27 4>;
+  #address-cells = <1>;
+  #size-cells = <0>;
+  clock-names = "i2c";
+  clocks = <&cru 335>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&i2c3_xfer>;
+ };
+
+ spi0: spi@20074000 {
+  compatible = "rockchip,rk3128-spi", "rockchip,rk3288-spi";
+  reg = <0x20074000 0x1000>;
+  interrupts = <0 23 4>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&spi0_tx &spi0_rx &spi0_clk &spi0_cs0 &spi0_cs1>;
+  clock-names = "spiclk", "apb_pclk";
+  dmas = <&pdma 8>, <&pdma 9>;
+  dma-names = "tx", "rx";
+  #address-cells = <1>;
+  #size-cells = <0>;
+  status = "disabled";
+ };
+
+ grf: syscon@20008000 {
+  compatible = "rockchip,rk3128-grf", "syscon";
+  reg = <0x20008000 0x1000>;
+  #address-cells = <1>;
+  #size-cells = <1>;
+
+  lvds: lvds {
+   compatible = "rockchip,rk3126-lvds";
+   phys = <&video_phy>;
+   phy-names = "phy";
+   status = "disabled";
+
+   ports {
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    port@0 {
+     reg = <0>;
+
+     lvds_in_vop: endpoint {
+      remote-endpoint = <&vop_out_lvds>;
+     };
+    };
+   };
+  };
+
+  rgb: rgb {
+   compatible = "rockchip,rk3128-rgb";
+   phys = <&video_phy>;
+   phy-names = "phy";
+   pinctrl-names = "default", "sleep";
+   pinctrl-0 = <&lcdc_rgb_pins>;
+   pinctrl-1 = <&lcdc_sleep_pins>;
+   status = "disabled";
+
+   ports {
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    port@0 {
+     reg = <0>;
+
+     rgb_in_vop: endpoint {
+      remote-endpoint = <&vop_out_rgb>;
+     };
+    };
+   };
+  };
+
+  u2phy: usb2-phy@17c {
+   compatible = "rockchip,rk3128-usb2phy";
+   reg = <0x017c 0x0c>;
+   clocks = <&cru 142>;
+   clock-names = "phyclk";
+   #clock-cells = <0>;
+   clock-output-names = "usb480m_phy";
+   assigned-clocks = <&cru 154>;
+   assigned-clock-parents = <&u2phy>;
+   status = "disabled";
+
+   u2phy_otg: otg-port {
+    #phy-cells = <0>;
+    interrupts = <0 35 4>,
+          <0 51 4>,
+          <0 52 4>;
+    interrupt-names = "otg-bvalid", "otg-id",
+        "linestate";
+    status = "disabled";
+   };
+
+   u2phy_host: host-port {
+    #phy-cells = <0>;
+    interrupts = <0 53 4>;
+    interrupt-names = "linestate";
+    status = "disabled";
+   };
+  };
+ };
+
+ pinctrl: pinctrl@20008000 {
+  compatible = "rockchip,rk3128-pinctrl";
+  reg = <0x20008000 0xA8>,
+        <0x200080A8 0x4C>,
+        <0x20008118 0x20>,
+        <0x20008100 0x04>;
+  reg-names = "base", "mux", "pull", "drv";
+  rockchip,grf = <&grf>;
+  #address-cells = <1>;
+  #size-cells = <1>;
+  ranges;
+
+  gpio0: gpio0@2007c000 {
+   compatible = "rockchip,gpio-bank";
+   reg = <0x2007c000 0x100>;
+   interrupts = <0 36 4>;
+   clocks = <&cru 320>;
+   gpio-controller;
+   #gpio-cells = <2>;
+   interrupt-controller;
+   #interrupt-cells = <2>;
+  };
+
+  gpio1: gpio1@20080000 {
+   compatible = "rockchip,gpio-bank";
+   reg = <0x20080000 0x100>;
+   interrupts = <0 37 4>;
+   clocks = <&cru 321>;
+   gpio-controller;
+   #gpio-cells = <2>;
+   interrupt-controller;
+   #interrupt-cells = <2>;
+  };
+
+  gpio2: gpio2@20084000 {
+   compatible = "rockchip,gpio-bank";
+   reg = <0x20084000 0x100>;
+   interrupts = <0 38 4>;
+   clocks = <&cru 322>;
+   gpio-controller;
+   #gpio-cells = <2>;
+   interrupt-controller;
+   #interrupt-cells = <2>;
+  };
+
+  gpio3: gpio2@20088000 {
+   compatible = "rockchip,gpio-bank";
+   reg = <0x20088000 0x100>;
+   interrupts = <0 39 4>;
+   clocks = <&cru 323>;
+   gpio-controller;
+   #gpio-cells = <2>;
+   interrupt-controller;
+   #interrupt-cells = <2>;
+  };
+
+  pcfg_pull_default: pcfg_pull_default {
+   bias-pull-pin-default;
+  };
+
+  pcfg_pull_none: pcfg-pull-none {
+   bias-disable;
+  };
+
+  emmc {
+   emmc_clk: emmc-clk {
+    rockchip,pins = <2 7 2 &pcfg_pull_none>;
+   };
+
+   emmc_cmd: emmc-cmd {
+    rockchip,pins = <1 22 2 &pcfg_pull_default>;
+   };
+
+   emmc_cmd1: emmc-cmd1 {
+    rockchip,pins = <2 4 2 &pcfg_pull_default>;
+   };
+
+   emmc_pwr: emmc-pwr {
+    rockchip,pins = <2 5 2 &pcfg_pull_default>;
+   };
+
+   emmc_bus1: emmc-bus1 {
+    rockchip,pins = <1 24 2 &pcfg_pull_default>;
+   };
+
+   emmc_bus4: emmc-bus4 {
+    rockchip,pins = <1 24 2 &pcfg_pull_default>,
+      <1 25 2 &pcfg_pull_default>,
+      <1 26 2 &pcfg_pull_default>,
+      <1 27 2 &pcfg_pull_default>;
+   };
+
+   emmc_bus8: emmc-bus8 {
+    rockchip,pins = <1 24 2 &pcfg_pull_default>,
+      <1 25 2 &pcfg_pull_default>,
+      <1 26 2 &pcfg_pull_default>,
+      <1 27 2 &pcfg_pull_default>,
+      <1 28 2 &pcfg_pull_default>,
+      <1 29 2 &pcfg_pull_default>,
+      <1 30 2 &pcfg_pull_default>,
+      <1 31 2 &pcfg_pull_default>;
+   };
+  };
+
+  i2c0 {
+   i2c0_xfer: i2c0-xfer {
+    rockchip,pins = <0 0 1 &pcfg_pull_none>,
+      <0 1 1 &pcfg_pull_none>;
+   };
+  };
+
+  i2c1 {
+   i2c1_xfer: i2c1-xfer {
+    rockchip,pins = <0 2 1 &pcfg_pull_none>,
+      <0 3 1 &pcfg_pull_none>;
+   };
+  };
+
+  i2c2 {
+   i2c2_xfer: i2c2-xfer {
+    rockchip,pins = <2 20 3 &pcfg_pull_none>,
+      <2 21 3 &pcfg_pull_none>;
+   };
+  };
+
+  i2c3 {
+   i2c3_xfer: i2c3-xfer {
+    rockchip,pins = <0 6 1 &pcfg_pull_none>,
+      <0 7 1 &pcfg_pull_none>;
+   };
+  };
+
+  lcdc {
+   lcdc_rgb_pins: lcdc-rgb-pins {
+    rockchip,pins =
+     <2 8 1 &pcfg_pull_none>,
+     <2 9 1 &pcfg_pull_none>,
+     <2 10 1 &pcfg_pull_none>,
+     <2 11 1 &pcfg_pull_none>,
+     <2 12 1 &pcfg_pull_none>,
+     <2 13 1 &pcfg_pull_none>,
+     <2 14 1 &pcfg_pull_none>,
+     <2 15 1 &pcfg_pull_none>,
+     <2 16 1 &pcfg_pull_none>,
+     <2 17 1 &pcfg_pull_none>,
+     <2 18 1 &pcfg_pull_none>,
+     <2 19 1 &pcfg_pull_none>,
+     <2 20 1 &pcfg_pull_none>,
+     <2 21 1 &pcfg_pull_none>,
+     <2 22 1 &pcfg_pull_none>,
+     <2 23 1 &pcfg_pull_none>,
+     <2 24 1 &pcfg_pull_none>,
+     <2 25 1 &pcfg_pull_none>;
+   };
+
+   lcdc_sleep_pins: lcdc-sleep-pins {
+    rockchip,pins =
+     <2 8 0 &pcfg_pull_none>,
+     <2 9 0 &pcfg_pull_none>,
+     <2 10 0 &pcfg_pull_none>,
+     <2 11 0 &pcfg_pull_none>,
+     <2 12 0 &pcfg_pull_none>,
+     <2 13 0 &pcfg_pull_none>,
+     <2 14 0 &pcfg_pull_none>,
+     <2 15 0 &pcfg_pull_none>,
+     <2 16 0 &pcfg_pull_none>,
+     <2 17 0 &pcfg_pull_none>,
+     <2 18 0 &pcfg_pull_none>,
+     <2 19 0 &pcfg_pull_none>,
+     <2 20 0 &pcfg_pull_none>,
+     <2 21 0 &pcfg_pull_none>,
+     <2 22 0 &pcfg_pull_none>,
+     <2 23 0 &pcfg_pull_none>,
+     <2 24 0 &pcfg_pull_none>,
+     <2 25 0 &pcfg_pull_none>;
+   };
+  };
+
+  uart0 {
+   uart0_xfer: uart0-xfer {
+    rockchip,pins = <2 26 2 &pcfg_pull_default>,
+      <2 27 2 &pcfg_pull_none>;
+   };
+
+   uart0_cts: uart0-cts {
+    rockchip,pins = <2 29 2 &pcfg_pull_none>;
+   };
+
+   uart0_rts: uart0-rts {
+    rockchip,pins = <0 17 2 &pcfg_pull_none>;
+   };
+  };
+
+  uart1 {
+   uart1_xfer: uart1-xfer {
+    rockchip,pins = <1 9 2 &pcfg_pull_default>,
+      <1 10 2 &pcfg_pull_default>;
+   };
+
+   uart1_cts: uart1-cts {
+    rockchip,pins = <1 8 2 &pcfg_pull_none>;
+   };
+
+   uart1_rts: uart1-rts {
+    rockchip,pins = <1 11 2 &pcfg_pull_none>;
+   };
+  };
+
+  uart2 {
+   uart2_xfer: uart2-xfer {
+    rockchip,pins = <1 18 2 &pcfg_pull_default>,
+      <1 19 2 &pcfg_pull_none>;
+   };
+
+   uart2_cts: uart2-cts {
+    rockchip,pins = <0 25 1 &pcfg_pull_none>;
+   };
+
+   uart2_rts: uart2-rts {
+    rockchip,pins = <0 24 1 &pcfg_pull_none>;
+   };
+  };
+
+  sdmmc {
+   sdmmc_clk: sdmmc-clk {
+    rockchip,pins = <1 16 1 &pcfg_pull_none>;
+   };
+
+   sdmmc_cmd: sdmmc-cmd {
+    rockchip,pins = <1 15 1 &pcfg_pull_default>;
+   };
+
+   sdmmc_wp: sdmmc-wp {
+    rockchip,pins = <1 7 1 &pcfg_pull_default>;
+   };
+
+   sdmmc_pwren: sdmmc-pwren {
+    rockchip,pins = <1 14 1 &pcfg_pull_default>;
+   };
+
+   sdmmc_bus4: sdmmc-bus4 {
+    rockchip,pins = <1 18 1 &pcfg_pull_default>,
+      <1 19 1 &pcfg_pull_default>,
+      <1 20 1 &pcfg_pull_default>,
+      <1 21 1 &pcfg_pull_default>;
+   };
+  };
+
+  sdio {
+   sdio_clk: sdio-clk {
+    rockchip,pins = <1 0 2 &pcfg_pull_none>;
+   };
+
+   sdio_cmd: sdio-cmd {
+    rockchip,pins = <0 3 2 &pcfg_pull_default>;
+   };
+
+   sdio_pwren: sdio-pwren {
+    rockchip,pins = <0 30 1 &pcfg_pull_default>;
+   };
+
+   sdio_bus4: sdio-bus4 {
+    rockchip,pins = <1 1 2 &pcfg_pull_default>,
+      <1 2 2 &pcfg_pull_default>,
+      <1 4 2 &pcfg_pull_default>,
+      <1 5 2 &pcfg_pull_default>;
+   };
+  };
+
+  hdmi {
+   hdmii2c_xfer: hdmii2c-xfer {
+    rockchip,pins = <0 6 2 &pcfg_pull_none>,
+      <0 7 2 &pcfg_pull_none>;
+   };
+  };
+
+  i2s {
+   i2s_bus: i2s-bus {
+    rockchip,pins = <0 8 1 &pcfg_pull_none>,
+      <0 9 1 &pcfg_pull_none>,
+      <0 11 1 &pcfg_pull_none>,
+      <0 12 1 &pcfg_pull_none>,
+      <0 13 1 &pcfg_pull_none>,
+      <0 14 1 &pcfg_pull_none>;
+   };
+
+   i2s1_bus: i2s1-bus {
+    rockchip,pins = <1 0 1 &pcfg_pull_none>,
+      <1 1 1 &pcfg_pull_none>,
+      <1 2 1 &pcfg_pull_none>,
+      <1 3 1 &pcfg_pull_none>,
+      <1 4 1 &pcfg_pull_none>,
+      <1 5 1 &pcfg_pull_none>;
+   };
+  };
+
+  pwm0 {
+   pwm0_pin: pwm0-pin {
+    rockchip,pins = <0 26 1 &pcfg_pull_none>;
+   };
+  };
+
+  pwm1 {
+   pwm1_pin: pwm1-pin {
+    rockchip,pins = <0 27 1 &pcfg_pull_none>;
+   };
+  };
+
+  pwm2 {
+   pwm2_pin: pwm2-pin {
+    rockchip,pins = <0 28 1 &pcfg_pull_none>;
+   };
+  };
+
+  pwm3 {
+   pwm3_pin: pwm3-pin {
+    rockchip,pins = <3 26 1 &pcfg_pull_none>;
+   };
+  };
+
+  gmac {
+   rgmii_pins: rgmii-pins {
+    rockchip,pins = <2 8 3 &pcfg_pull_default>,
+      <2 9 3 &pcfg_pull_default>,
+      <2 11 3 &pcfg_pull_default>,
+      <2 12 3 &pcfg_pull_default>,
+      <2 13 3 &pcfg_pull_default>,
+      <2 14 3 &pcfg_pull_default>,
+      <2 16 3 &pcfg_pull_default>,
+      <2 17 3 &pcfg_pull_default>,
+      <2 18 3 &pcfg_pull_default>,
+      <2 19 3 &pcfg_pull_default>,
+      <2 25 3 &pcfg_pull_default>,
+      <2 20 4 &pcfg_pull_default>,
+      <2 21 4 &pcfg_pull_default>,
+      <2 22 4 &pcfg_pull_default>,
+      <2 23 4 &pcfg_pull_default>;
+   };
+
+   rmii_pins: rmii-pins {
+    rockchip,pins = <2 8 3 &pcfg_pull_default>,
+      <2 12 3 &pcfg_pull_default>,
+      <2 13 3 &pcfg_pull_default>,
+      <2 14 3 &pcfg_pull_default>,
+      <2 15 3 &pcfg_pull_default>,
+      <2 16 3 &pcfg_pull_default>,
+      <2 17 3 &pcfg_pull_default>,
+      <2 19 3 &pcfg_pull_default>,
+      <2 20 3 &pcfg_pull_default>,
+      <2 25 3 &pcfg_pull_default>;
+   };
+  };
+
+  spdif {
+   spdif_tx: spdif-tx {
+    rockchip,pins = <3 27 1 &pcfg_pull_none>;
+   };
+  };
+
+  spi {
+   spi0_clk: spi0-clk {
+    rockchip,pins = <1 8 1 &pcfg_pull_default>;
+   };
+
+   spi0_cs0: spi0-cs0 {
+    rockchip,pins = <1 11 1 &pcfg_pull_default>;
+   };
+
+   spi0_tx: spi0-tx {
+    rockchip,pins = <1 9 1 &pcfg_pull_default>;
+   };
+
+   spi0_rx: spi0-rx {
+    rockchip,pins = <1 10 1 &pcfg_pull_default>;
+   };
+
+   spi0_cs1: spi0-cs1 {
+    rockchip,pins = <1 12 1 &pcfg_pull_default>;
+   };
+
+   spi1_clk: spi1-clk {
+    rockchip,pins = <2 0 2 &pcfg_pull_default>;
+   };
+
+   spi1_cs0: spi1-cs0 {
+    rockchip,pins = <1 30 3 &pcfg_pull_default>;
+   };
+
+   spi1_tx: spi1-tx {
+    rockchip,pins = <1 29 3 &pcfg_pull_default>;
+   };
+
+   spi1_rx: spi1-rx {
+    rockchip,pins = <1 28 3 &pcfg_pull_default>;
+   };
+
+   spi1_cs1: spi1-cs1 {
+    rockchip,pins = <1 31 3 &pcfg_pull_default>;
+   };
+
+   spi2_clk: spi2-clk {
+    rockchip,pins = <0 9 2 &pcfg_pull_default>;
+   };
+
+   spi2_cs0: spi2-cs0 {
+    rockchip,pins = <0 14 2 &pcfg_pull_default>;
+   };
+
+   spi2_tx: spi2-tx {
+    rockchip,pins = <0 11 2 &pcfg_pull_default>;
+   };
+
+   spi2_rx: spi2-rx {
+    rockchip,pins = <0 13 2 &pcfg_pull_default>;
+   };
+  };
+ };
+};
+# 10 "arch/arm/dts/.rk3128-evb.dtb.pre.tmp" 2
+# 1 "arch/arm/dts/rk3128-u-boot.dtsi" 1
+
+
+
+
+
+
+/ {
+ aliases {
+  mmc0 = &emmc;
+  mmc1 = &sdmmc;
+ };
+
+ chosen {
+  stdout-path = &uart2;
+ };
+};
+
+&psci {
+ u-boot,dm-pre-reloc;
+ status = "okay";
+};
+
+&dmc {
+ u-boot,dm-pre-reloc;
+};
+
+&nandc {
+ u-boot,dm-pre-reloc;
+ status = "okay";
+ #address-cells = <1>;
+ #size-cells = <0>;
+
+ nand@0 {
+  u-boot,dm-spl;
+  reg = <0>;
+  nand-ecc-mode = "hw";
+  nand-ecc-strength = <16>;
+  nand-ecc-step-size = <1024>;
+ };
+};
+
+&emmc {
+ u-boot,dm-pre-reloc;
+ status = "okay";
+};
+
+&grf {
+ u-boot,dm-pre-reloc;
+};
+
+&cru {
+ u-boot,dm-pre-reloc;
+};
+
+&uart1 {
+ clock-frequency = <24000000>;
+ u-boot,dm-pre-reloc;
+};
+
+&uart2 {
+ u-boot,dm-pre-reloc;
+ clock-frequency = <24000000>;
+};
+
+&u2phy {
+ u-boot,dm-pre-reloc;
+ status = "okay";
+};
+
+&u2phy_otg {
+ u-boot,dm-pre-reloc;
+ status = "okay";
+};
+
+&usb_otg {
+ u-boot,dm-pre-reloc;
+ status = "okay";
+};
+# 11 "arch/arm/dts/.rk3128-evb.dtb.pre.tmp" 2
+
+/ {
+ model = "Rockchip RK3128 Evaluation board";
+ compatible = "rockchip,rk3128-evb", "rockchip,rk3128";
+
+ vcc_sys: vcc-sys {
+  compatible = "regulator-fixed";
+  regulator-name = "vcc_sys";
+  regulator-always-on;
+  regulator-boot-on;
+  regulator-min-microvolt = <5000000>;
+  regulator-max-microvolt = <5000000>;
+ };
+
+ vcc5v0_otg: vcc5v0-otg-drv {
+  compatible = "regulator-fixed";
+  regulator-name = "vcc5v0_otg";
+  gpio = <&gpio0 26 0>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&otg_vbus_drv>;
+  regulator-min-microvolt = <5000000>;
+  regulator-max-microvolt = <5000000>;
+ };
+
+ vcc5v0_host: vcc5v0-host-drv {
+  compatible = "regulator-fixed";
+  regulator-name = "vcc5v0_host";
+  gpio = <&gpio2 23 0>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&host_vbus_drv>;
+  regulator-min-microvolt = <5000000>;
+  regulator-max-microvolt = <5000000>;
+  regulator-always-on;
+ };
+};
+
+&i2c1 {
+ status = "okay";
+
+        hym8563: hym8563@51 {
+  compatible = "haoyu,hym8563";
+  reg = <0x51>;
+  #clock-cells = <0>;
+  clock-frequency = <32768>;
+  clock-output-names = "xin32k";
+ };
+};
+
+&u2phy {
+ status = "okay";
+};
+
+&u2phy_otg {
+ status = "okay";
+};
+
+&u2phy_host {
+ status = "okay";
+};
+
+&uart2 {
+ status = "okay";
+};
+
+&usb_host_ehci {
+ status = "okay";
+};
+
+&usb_host_ohci {
+ status = "okay";
+};
+
+&usb_otg {
+ vbus-supply = <&vcc5v0_otg>;
+ status = "okay";
+};
+
+&emmc {
+ fifo-mode;
+ status = "okay";
+};
+
+&i2c0 {
+ status = "okay";
+ clock-frequency = <400000>;
+
+ rk818: pmic@1c {
+  compatible = "rockchip,rk818";
+  status = "okay";
+  reg = <0x1c>;
+  clock-output-names = "rk818-clkout1", "wifibt_32kin";
+  interrupt-parent = <&gpio3>;
+  interrupts = <22 8>;
+  pinctrl-names = "default";
+  pinctrl-0 = <&pmic_int_l>;
+  rockchip,system-power-controller;
+  wakeup-source;
+  #clock-cells = <1>;
+
+  vcc1-supply = <&vcc_sys>;
+  vcc2-supply = <&vcc_sys>;
+  vcc3-supply = <&vcc_sys>;
+  vcc4-supply = <&vcc_sys>;
+  vcc6-supply = <&vcc_sys>;
+  vcc7-supply = <&vcc_sys>;
+  vcc8-supply = <&vcc_sys>;
+  vcc9-supply = <&vcc_io>;
+
+  regulators {
+   vdd_arm: DCDC_REG1 {
+    regulator-name = "vdd_arm";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <750000>;
+    regulator-max-microvolt = <1450000>;
+    regulator-ramp-delay = <6001>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <1100000>;
+    };
+   };
+
+   vdd_logic: DCDC_REG2 {
+    regulator-name = "vdd_logic";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <750000>;
+    regulator-max-microvolt = <1450000>;
+    regulator-ramp-delay = <6001>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <1100000>;
+    };
+   };
+
+   vcc_ddr: DCDC_REG3 {
+    regulator-name = "vcc_ddr";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+    };
+   };
+
+   vcc_io: DCDC_REG4 {
+    regulator-name = "vcc_io";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <3300000>;
+    regulator-max-microvolt = <3300000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <3300000>;
+    };
+   };
+
+   rk818_ldo1: LDO_REG1 {
+    regulator-name = "rk818_ldo1";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <3300000>;
+    regulator-max-microvolt = <3300000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <3300000>;
+    };
+   };
+
+   rk818_ldo2: LDO_REG2 {
+    regulator-name = "rk818_ldo2";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <3000000>;
+    regulator-max-microvolt = <3000000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <3000000>;
+    };
+   };
+
+   rk818_ldo3: LDO_REG3 {
+    regulator-name = "rk818_ldo3";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <1100000>;
+    regulator-max-microvolt = <1100000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <1100000>;
+    };
+   };
+
+   rk818_ldo4: LDO_REG4 {
+    regulator-name = "rk818_ldo4";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <2800000>;
+    regulator-max-microvolt = <2800000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <2800000>;
+    };
+   };
+
+   rk818_ldo5: LDO_REG5 {
+    regulator-name = "rk818_ldo5";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <3000000>;
+    regulator-max-microvolt = <3000000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <3000000>;
+    };
+   };
+
+   rk818_ldo6: LDO_REG6 {
+    regulator-name = "rk818_ldo6";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <1200000>;
+    regulator-max-microvolt = <1200000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <1200000>;
+    };
+   };
+
+   rk818_ldo7: LDO_REG7 {
+    regulator-name = "rk818_ldo7";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <1800000>;
+    };
+   };
+
+   rk818_ldo8: LDO_REG8 {
+    regulator-name = "rk818_ldo8";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <1800000>;
+    };
+   };
+
+   vcc_sd: LDO_REG9 {
+    regulator-name = "vcc_sd";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <3000000>;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+     regulator-suspend-microvolt = <3000000>;
+    };
+   };
+
+   rk818_ldo10: SWITCH_REG {
+    regulator-name = "rk818_ldo10";
+    regulator-always-on;
+    regulator-boot-on;
+    regulator-state-mem {
+     regulator-on-in-suspend;
+    };
+   };
+  };
+
+  battery {
+   compatible = "rk818-battery";
+   ocv_table = <3400 3650 3693 3707 3731 3749 3760
+         3770 3782 3796 3812 3829 3852 3882
+         3915 3951 3981 4047 4086 4132 4182>;
+   design_capacity = <4000>;
+   design_qmax = <4000>;
+   bat_res = <100>;
+   max_input_current = <2000>;
+   max_chrg_current = <1400>;
+   max_chrg_voltage = <4200>;
+   sleep_enter_current = <300>;
+   sleep_exit_current = <300>;
+   power_off_thresd = <3400>;
+   zero_algorithm_vol = <3850>;
+   energy_mode = <0>;
+   fb_temperature = <105>;
+   sample_res = <20>;
+   max_soc_offset = <60>;
+   monitor_sec = <5>;
+   virtual_power = <1>;
+   power_dc2otg = <0>;
+  };
+ };
+};
+
+&pinctrl {
+ pmic {
+  pmic_int_l: pmic-int-l {
+   rockchip,pins = <3 22 0 &pcfg_pull_default>;
+  };
+ };
+
+ usb_otg {
+  otg_vbus_drv: otg-vbus-drv {
+   rockchip,pins = <0 26 0 &pcfg_pull_none>;
+  };
+ };
+
+ usb_host {
+  host_vbus_drv: host-vbus-drv {
+   rockchip,pins = <2 23 0 &pcfg_pull_none>;
+  };
+ };
+};

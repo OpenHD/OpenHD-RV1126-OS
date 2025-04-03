@@ -1,0 +1,10 @@
+rockchip_panel.c:89:12:rockchip_panel_parse_cmds	16	static
+rockchip_panel.c:395:12:rockchip_panel_ofdata_to_platdata	32	static
+rockchip_panel.c:371:13:panel_simple_disable	16	static
+rockchip_panel.c:354:13:panel_simple_enable	16	static
+rockchip_panel.c:212:12:rockchip_panel_send_dsi_cmds	32	static
+rockchip_panel.c:452:12:rockchip_panel_probe	48	static
+rockchip_panel.c:185:12:rockchip_panel_send_spi_cmds.isra.0	40	static
+rockchip_panel.c:161:12:rockchip_panel_send_mcu_cmds.isra.1	24	static
+rockchip_panel.c:316:13:panel_simple_unprepare	16	static
+rockchip_panel.c:269:13:panel_simple_prepare	24	static

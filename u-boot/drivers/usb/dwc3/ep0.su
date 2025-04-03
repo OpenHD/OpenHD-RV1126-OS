@@ -1,0 +1,14 @@
+ep0.c:323:13:dwc3_ep0_status_cmpl	0	static
+ep0.c:527:12:dwc3_ep0_delegate_req	0	static
+ep0.c:50:12:dwc3_ep0_start_trans	40	static
+ep0.c:932:13:__dwc3_ep0_do_control_data	32	static
+ep0.c:387:12:dwc3_ep0_handle_feature	16	static
+ep0.c:1006:13:__dwc3_ep0_do_control_status	24	static
+ep0.c:110:12:__dwc3_gadget_ep0_queue	16	static
+ep0.c:594:13:dwc3_ep0_set_sel_cmpl	16	static
+ep0.c:213:5:dwc3_gadget_ep0_queue	0	static
+ep0.c:297:6:dwc3_ep0_out_start	16	static
+ep0.c:250:13:dwc3_ep0_stall_and_restart	16	static
+ep0.c:285:5:dwc3_gadget_ep0_set_halt	8	static
+ep0.c:275:5:__dwc3_gadget_ep0_set_halt	8	static
+ep0.c:1090:6:dwc3_ep0_interrupt	80	static

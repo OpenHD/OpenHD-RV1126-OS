@@ -1,0 +1,1 @@
+cmd_net/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o net/built-in.o net/checksum.o net/arp.o net/bootp.o net/eth-uclass.o net/eth_common.o net/net.o net/ping.o net/tftp.o 

@@ -1,0 +1,8 @@
+param.c:55:17:param_parse_atf_mem	32	static
+param.c:99:17:param_parse_optee_mem	16	static
+param.c:146:17:param_parse_common_resv_mem	0	static
+param.c:167:5:param_parse_assign_bootdev	24	static
+param.c:186:5:param_parse_atags_bootdev	16	static
+param.c:282:18:param_parse_ddr_mem	64	static
+param.c:412:5:param_parse_pre_serial	8	static
+param.c:442:5:param_parse_pubkey_fuse_programmed	8	static

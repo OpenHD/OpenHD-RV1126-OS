@@ -1,0 +1,7 @@
+rockchip_dw_mmc.c:81:12:rockchip_dwmmc_ofdata_to_platdata	16	static
+rockchip_dw_mmc.c:59:13:rockchip_dwmmc_get_mmc_clk	16	static
+rockchip_dw_mmc.c:126:12:rockchip_dwmmc_execute_tuning	32	static
+rockchip_dw_mmc.c:259:12:rockchip_dwmmc_bind	8	static
+rockchip_dw_mmc.c:41:5:board_mmc_dm_reinit	16	static
+rockchip_dw_mmc.c:56:13:mmc_gpio_init_direct	0	static
+rockchip_dw_mmc.c:175:12:rockchip_dwmmc_probe	24	static

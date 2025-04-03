@@ -1,0 +1,4 @@
+mmc_write.c:18:14:mmc_erase_t	56	static
+mmc_write.c:162:14:mmc_write_blocks	72	static
+mmc_write.c:83:7:mmc_berase	24	static
+mmc_write.c:221:7:mmc_bwrite	32	static

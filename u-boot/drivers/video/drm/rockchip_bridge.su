@@ -1,0 +1,7 @@
+rockchip_bridge.c:8:6:rockchip_bridge_init	0	static
+rockchip_bridge.c:22:6:rockchip_bridge_pre_enable	8	static
+rockchip_bridge.c:34:6:rockchip_bridge_post_disable	8	static
+rockchip_bridge.c:46:6:rockchip_bridge_enable	8	static
+rockchip_bridge.c:58:6:rockchip_bridge_disable	8	static
+rockchip_bridge.c:70:6:rockchip_bridge_mode_set	16	static
+rockchip_bridge.c:83:6:rockchip_bridge_detect	8	static

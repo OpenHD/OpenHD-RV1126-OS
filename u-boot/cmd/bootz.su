@@ -1,0 +1,2 @@
+bootz.c:14:12:bootz_setup	8	static
+bootz.c:61:5:do_bootz	56	static

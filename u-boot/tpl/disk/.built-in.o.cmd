@@ -1,0 +1,1 @@
+cmd_tpl/disk/built-in.o :=  /github/OpenHD-RV1126-OS/prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-2017.05-x86_64_arm-linux-gnueabihf/bin/arm-rockchip631-linux-gnueabihf-ld.bfd     -r -o tpl/disk/built-in.o tpl/disk/part.o 

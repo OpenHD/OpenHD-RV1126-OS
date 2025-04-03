@@ -1,0 +1,6 @@
+inno_mipi_phy.c:626:12:inno_mipi_dphy_power_off	8	static
+inno_mipi_phy.c:719:12:inno_mipi_dphy_probe	16	static
+inno_mipi_phy.c:683:12:inno_mipi_dphy_init	8	static
+inno_mipi_phy.c:399:13:inno_mipi_dphy_lane_timing_init	144	static
+inno_mipi_phy.c:606:12:inno_mipi_dphy_power_on	8	static
+inno_mipi_phy.c:638:22:inno_mipi_dphy_set_pll	112	static

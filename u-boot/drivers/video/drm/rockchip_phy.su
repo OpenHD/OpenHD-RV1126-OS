@@ -1,0 +1,7 @@
+rockchip_phy.c:10:5:rockchip_phy_init	0	static
+rockchip_phy.c:21:5:rockchip_phy_power_on	0	static
+rockchip_phy.c:32:5:rockchip_phy_power_off	0	static
+rockchip_phy.c:43:15:rockchip_phy_set_pll	0	static
+rockchip_phy.c:55:5:rockchip_phy_set_bus_width	0	static
+rockchip_phy.c:66:6:rockchip_phy_round_rate	0	static
+rockchip_phy.c:77:5:rockchip_phy_set_mode	0	static

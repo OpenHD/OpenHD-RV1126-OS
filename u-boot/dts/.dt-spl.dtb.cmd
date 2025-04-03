@@ -1,0 +1,1 @@
+cmd_dts/dt-spl.dtb := ./tools/fdtgrep -b u-boot,dm-spl -RT arch/arm/dts/rv1126-evb.dtb -n /chosen -n config -O dtb | ./tools/fdtgrep -r -O dtb - -o dts/dt-spl.dtb -P interrupt-parent -P assigned-clocks -P assigned-clock-rates -P assigned-clock-parents

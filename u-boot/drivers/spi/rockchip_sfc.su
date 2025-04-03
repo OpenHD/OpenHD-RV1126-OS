@@ -1,0 +1,17 @@
+rockchip_sfc.c:226:12:rockchip_sfc_get_max_dll_cells	0	static
+rockchip_sfc.c:240:28:rockchip_sfc_set_delay_lines	8	static
+rockchip_sfc.c:789:12:rockchip_sfc_set_mode	0	static
+rockchip_sfc.c:649:12:rockchip_sfc_adjust_op_size	8	static
+rockchip_sfc.c:263:12:rockchip_sfc_ofdata_to_platdata	16	static
+rockchip_sfc.c:291:12:rockchip_sfc_probe	16	static
+rockchip_sfc.c:397:12:rockchip_sfc_xfer_setup.isra.3	24	static
+rockchip_sfc.c:194:12:rockchip_sfc_reset.isra.7	16	static
+rockchip_sfc.c:375:12:rockchip_sfc_wait_for_dma_finished	16	static
+rockchip_sfc.c:343:12:rockchip_sfc_wait_rxfifo_ready.isra.5.constprop	16	static
+rockchip_sfc.c:496:12:rockchip_sfc_read_fifo	32	static
+rockchip_sfc.c:598:12:rockchip_sfc_xfer_done.constprop	16	static
+rockchip_sfc.c:326:12:rockchip_sfc_wait_txfifo_ready.isra.4.constprop	16	static
+rockchip_sfc.c:465:12:rockchip_sfc_write_fifo	32	static
+rockchip_sfc.c:616:12:rockchip_sfc_exec_op	48	static
+rockchip_sfc.c:659:12:rockchip_sfc_exec_op_bypass.isra.9	16	static
+rockchip_sfc.c:755:12:rockchip_sfc_set_speed	96	static

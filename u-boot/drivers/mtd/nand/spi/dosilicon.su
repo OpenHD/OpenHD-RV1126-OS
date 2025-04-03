@@ -1,0 +1,5 @@
+dosilicon.c:39:12:ds35xxga_ooblayout_ecc	0	static
+dosilicon.c:51:12:ds35xxga_ooblayout_free	0	static
+dosilicon.c:68:12:ds35xxgb_ooblayout_ecc	0	static
+dosilicon.c:80:12:ds35xxgb_ooblayout_free	0	static
+dosilicon.c:98:12:ds35xxgb_ecc_get_status	0	static

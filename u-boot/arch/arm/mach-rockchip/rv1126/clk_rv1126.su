@@ -1,0 +1,2 @@
+clk_rv1126.c:12:5:rockchip_get_clk	0	static
+clk_rv1126.c:18:7:rockchip_get_cru	16	static

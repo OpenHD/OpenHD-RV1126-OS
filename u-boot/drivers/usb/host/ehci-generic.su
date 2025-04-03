@@ -1,0 +1,2 @@
+ehci-generic.c:77:12:ehci_usb_probe	40	static
+ehci-generic.c:186:12:ehci_usb_remove	16	static

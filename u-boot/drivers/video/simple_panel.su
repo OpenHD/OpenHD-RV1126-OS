@@ -1,0 +1,3 @@
+simple_panel.c:23:12:simple_panel_enable_backlight	8	static
+simple_panel.c:38:12:simple_panel_ofdata_to_platdata	24	static
+simple_panel.c:71:12:simple_panel_probe	8	static

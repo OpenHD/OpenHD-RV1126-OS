@@ -1,0 +1,7 @@
+NAME=Buildroot
+VERSION=-gb1967ea88-dirty
+ID=buildroot
+VERSION_ID=2022.08-rc1
+PRETTY_NAME="Buildroot 2022.08-rc1"
+BUILD_INFO="openhd@dragon Fri Mar 28 00:00:08 CET 2025 - /github/OpenHD-RV1126-OS/buildroot/configs/rockchip_rv1126_rv1109_defconfig"
+KERNEL="4.19 - rv1126_defconfig"

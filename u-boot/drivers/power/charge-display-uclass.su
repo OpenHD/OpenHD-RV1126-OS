@@ -1,0 +1,2 @@
+charge-display-uclass.c:12:5:charge_display_show	8	static
+charge-display-uclass.c:22:5:charge_display	16	static

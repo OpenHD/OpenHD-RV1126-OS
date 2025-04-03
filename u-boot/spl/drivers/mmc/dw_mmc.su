@@ -1,0 +1,12 @@
+dw_mmc.c:675:12:dwmci_execute_tuning	8	static
+dw_mmc.c:655:13:dwmci_card_busy	8	static
+dw_mmc.c:795:12:dwmci_get_cd	40	static
+dw_mmc.c:85:12:dwmci_wait_reset.isra.0	0	static
+dw_mmc.c:589:12:dwmci_setup_bus.part.2	16	static
+dw_mmc.c:691:12:dwmci_set_ios	16	static
+dw_mmc.c:31:15:dwmci_memcpy_fromio	0	static
+dw_mmc.c:56:15:dwmci_memcpy_toio	0	static
+dw_mmc.c:320:12:dwmci_send_cmd	72	dynamic
+dw_mmc.c:814:5:dwmci_probe	16	static
+dw_mmc.c:843:6:dwmci_setup_cfg	8	static
+dw_mmc.c:879:5:dwmci_bind	0	static

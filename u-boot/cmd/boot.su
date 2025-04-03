@@ -1,0 +1,3 @@
+boot.c:64:12:do_reboot_brom	8	static
+boot.c:21:15:do_go_exec	4	static
+boot.c:31:12:do_go	16	static

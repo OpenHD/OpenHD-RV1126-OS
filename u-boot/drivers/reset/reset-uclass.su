@@ -1,0 +1,10 @@
+reset-uclass.c:35:5:reset_get_by_index	104	static
+reset-uclass.c:118:5:reset_get_by_name	16	static
+reset-uclass.c:136:5:reset_request	0	static
+reset-uclass.c:145:5:reset_free	0	static
+reset-uclass.c:154:5:reset_assert	0	static
+reset-uclass.c:163:5:reset_assert_bulk	16	static
+reset-uclass.c:176:5:reset_deassert	0	static
+reset-uclass.c:185:5:reset_deassert_bulk	16	static
+reset-uclass.c:198:5:reset_release_all	24	static
+reset-uclass.c:84:5:reset_get_bulk	24	static

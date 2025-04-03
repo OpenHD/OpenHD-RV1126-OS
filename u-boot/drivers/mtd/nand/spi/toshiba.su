@@ -1,0 +1,3 @@
+toshiba.c:31:12:tc58cxgxsx_ooblayout_ecc	0	static
+toshiba.c:43:12:tc58cxgxsx_ooblayout_free	0	static
+toshiba.c:61:12:tc58cxgxsx_ecc_get_status	72	static

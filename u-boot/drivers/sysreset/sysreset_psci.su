@@ -1,0 +1,1 @@
+sysreset_psci.c:13:12:psci_sysreset_request	8	static

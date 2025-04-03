@@ -1,0 +1,12 @@
+boot_rkimg.c:54:12:bootdev_init	16	static
+boot_rkimg.c:394:12:crypto_csum	40	static
+boot_rkimg.c:42:12:rk_board_early_fdt_fixup	0	static
+boot_rkimg.c:47:12:rk_board_scan_bootdev	0	static
+boot_rkimg.c:86:13:boot_devtype_init	24	static
+boot_rkimg.c:239:18:rockchip_get_bootdev	160	static
+boot_rkimg.c:279:6:rockchip_set_bootdev	0	static
+boot_rkimg.c:294:12:rockchip_dnl_key_pressed	8	static
+boot_rkimg.c:322:6:setup_download_mode	8	static
+boot_rkimg.c:350:6:board_run_recovery_wipe_data	1224	static
+boot_rkimg.c:559:5:rockchip_read_dtb_file	72	static
+boot_rkimg.c:596:5:rockchip_ram_read_dtb_file	32	static

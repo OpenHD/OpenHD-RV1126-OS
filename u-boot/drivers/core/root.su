@@ -1,0 +1,15 @@
+root.c:271:12:dm_scan_fdt_node	24	static
+root.c:218:12:dm_scan_fdt_live.isra.0	40	static
+root.c:37:17:dm_root	8	static
+root.c:47:6:dm_fixup_for_gd_move	0	static
+root.c:56:12:dm_get_translation_offset	8	static
+root.c:64:6:dm_set_translation_offset	8	static
+root.c:153:5:dm_init	8	static
+root.c:187:5:dm_uninit	8	static
+root.c:196:5:dm_remove_devices_flags	8	static
+root.c:204:5:dm_scan_platdata	8	static
+root.c:310:5:dm_scan_fdt_dev	0	static
+root.c:325:5:dm_scan_fdt	8	static
+root.c:343:5:dm_extended_scan_fdt	16	static
+root.c:367:12:dm_scan_other	0	static
+root.c:372:5:dm_init_and_scan	8	static
