@@ -29,3 +29,4 @@ fi
 echo "Extracting the file..."
 tar -xjvf bigFiles.bz2 
 ls -a
+./build.sh
