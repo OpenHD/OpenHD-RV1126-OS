@@ -11,7 +11,7 @@ SCIEBO_USERNAME="$1"
 SCIEBO_PASSWORD="$2"
 
 # File path in Sciebo
-FILE_PATH="https://uni-wuppertal.sciebo.de/remote.php/webdav/openhd/X21/bigFiles.bz2"
+FILE_PATH="https://uni-wuppertal.sciebo.de/remote.php/webdav/openhd/X21/home_runner_backup.tar.gz"
 
 # Download the file
 echo "Downloading file from Sciebo..."
@@ -27,6 +27,5 @@ fi
 
 # Extract the tar.gz file while preserving permissions
 echo "Extracting the file..."
-tar -xjvf bigFiles.bz2 
+tar -xjvf home_runner_backup.tar.gz
 ls -a
-#./build.sh

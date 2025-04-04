@@ -22,8 +22,6 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Download file from Sciebo
         env:
@@ -31,4 +29,4 @@ jobs:
           SCIEBO_PASSWORD: ${{ secrets.SCIEBO_PASSWORD }}
         run: |
           chmod +x init_OHD.sh  # Ensure the script is executable
-          ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD" && ./build.sh rockchip_v12_defconfig && ./build.sh
+          ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD" && ./build.sh
