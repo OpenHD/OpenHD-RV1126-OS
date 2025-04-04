@@ -41,11 +41,25 @@ jobs:
             sudo apt-get autoremove -y
             sudo apt-get clean
       - uses: actions/checkout@v4
+      
       - name: Download file from Sciebo
         env:
           SCIEBO_USERNAME: ${{ secrets.SCIEBO_USERNAME }}
           SCIEBO_PASSWORD: ${{ secrets.SCIEBO_PASSWORD }}
         run: |
-          apt install device-tree-compiler -y
-          chmod +x init_OHD.sh  # Ensure the script is executable
-          ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD" && ./build.sh
+          sudo apt install device-tree-compiler -y
+          chmod +x init_OHD.sh
+          ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD"
+      
+      - name: build
+        run: |
+          ./build.sh
+          - name: Zip the output directory
+          run: |
+            zip -r output.zip output
+      
+      - name: Upload zipped output
+        uses: actions/upload-artifact@v4
+        with:
+          name: output.zip
+          path: output.zip
