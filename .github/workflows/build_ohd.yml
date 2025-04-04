@@ -41,7 +41,7 @@ jobs:
             sudo apt-get autoremove -y
             sudo apt-get clean
       - uses: actions/checkout@v4
-      
+
       - name: Download file from Sciebo
         env:
           SCIEBO_USERNAME: ${{ secrets.SCIEBO_USERNAME }}
@@ -54,8 +54,8 @@ jobs:
       - name: build
         run: |
           ./build.sh
-          - name: Zip the output directory
-          run: |
+      - name: Zip the output directory
+        run: |
             zip -r output.zip output
       
       - name: Upload zipped output
