@@ -46,5 +46,6 @@ jobs:
           SCIEBO_USERNAME: ${{ secrets.SCIEBO_USERNAME }}
           SCIEBO_PASSWORD: ${{ secrets.SCIEBO_PASSWORD }}
         run: |
+          apt install device-tree-compiler -y
           chmod +x init_OHD.sh  # Ensure the script is executable
           ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD" && ./build.sh
