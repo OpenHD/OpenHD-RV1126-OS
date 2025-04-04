@@ -27,5 +27,5 @@ fi
 
 # Extract the tar.gz file while preserving permissions
 echo "Extracting the file..."
-tar -xjvf home_runner_backup.tar.gz
+sudo tar -xvpzf home_runner_backup.tar.gz -C /
 ls -a
