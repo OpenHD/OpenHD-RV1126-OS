@@ -27,22 +27,38 @@ jobs:
 
       - name: remove even more
         run: |
-            sudo apt-get purge -y \
-              '^llvm-.*' \
-              'php.*' \
-              '^mongodb-.*' \
-              '^mysql-.*' \
-              azure-cli \
-              google-chrome-stable \
-              firefox \
-              powershell \
-              microsoft-edge-stable \
-              mono-devel
-            sudo apt-get autoremove -y
-            sudo apt-get clean
-            ls -a
-            df -h
-            
+              sudo apt-get purge -y \
+                '^llvm-.*' \
+                'php.*' \
+                '^mongodb-.*' \
+                '^mysql-.*' \
+                azure-cli \
+                google-chrome-stable \
+                firefox \
+                powershell \
+                microsoft-edge-stable \
+                mono-devel
+  
+              sudo apt-get autoremove -y
+              sudo apt-get clean
+  
+              # Deep clean npm, gem, pip caches
+              rm -rf ~/.npm ~/.cache ~/.yarn ~/.cargo ~/.gem ~/.local ~/.dotnet /usr/share/dotnet /opt/hostedtoolcache
+  
+              # Remove large man pages and docs
+              sudo rm -rf /usr/share/man/* /usr/share/doc/* /usr/share/info/*
+  
+              # Kill unused locale files
+              sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' -exec rm -rf {} +
+  
+              # Optional: strip debug symbols from binaries
+              sudo find /usr -name '*.so*' -exec strip --strip-unneeded {} + 2>/dev/null || true
+              sudo find /usr -name '*.a' -exec strip --strip-debug {} + 2>/dev/null || true
+  
+              # Check space
+              df -h
+  
+
       - uses: actions/checkout@v4
 
       - name: Download file from Sciebo
