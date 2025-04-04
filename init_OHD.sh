@@ -29,3 +29,4 @@ fi
 echo "Extracting the file..."
 sudo tar -xvpzf home_runner_backup.tar.gz -C /
 ls -a
+cd home/runner/work/OpenHD-RV1126-OS/OpenHD-RV1126-OS/
