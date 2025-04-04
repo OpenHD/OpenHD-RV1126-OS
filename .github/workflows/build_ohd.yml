@@ -57,6 +57,8 @@ jobs:
       
       - name: build
         run: |
+          echo "BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y" >> buildroot/.config
+          echo "BR2_FAKEROOT=y" >> buildroot/.config
           ./build.sh
 
       - name: Zip the output directory
