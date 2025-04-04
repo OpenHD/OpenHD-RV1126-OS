@@ -54,6 +54,7 @@ jobs:
       - name: build
         run: |
           ./build.sh
+          
       - name: Zip the output directory
         run: |
             zip -r output.zip output
