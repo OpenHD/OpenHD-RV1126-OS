@@ -40,6 +40,9 @@ jobs:
               mono-devel
             sudo apt-get autoremove -y
             sudo apt-get clean
+            ls -a
+            df -h
+            
       - uses: actions/checkout@v4
 
       - name: Download file from Sciebo
