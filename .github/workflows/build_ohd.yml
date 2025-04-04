@@ -50,6 +50,10 @@ jobs:
           sudo apt install device-tree-compiler expect -y
           chmod +x init_OHD.sh
           ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD"
+
+      - name: Fix ownership before build
+        run: |
+          sudo chown -R $(whoami):$(id -gn) ${{ github.workspace }}
       
       - name: build
         run: |
