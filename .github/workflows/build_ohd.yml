@@ -47,14 +47,14 @@ jobs:
           SCIEBO_USERNAME: ${{ secrets.SCIEBO_USERNAME }}
           SCIEBO_PASSWORD: ${{ secrets.SCIEBO_PASSWORD }}
         run: |
-          sudo apt install device-tree-compiler -y
+          sudo apt install device-tree-compiler expect -y
           chmod +x init_OHD.sh
           ./init_OHD.sh "$SCIEBO_USERNAME" "$SCIEBO_PASSWORD"
       
       - name: build
         run: |
           ./build.sh
-          
+
       - name: Zip the output directory
         run: |
             zip -r output.zip output
