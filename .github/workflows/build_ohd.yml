@@ -40,7 +40,7 @@ jobs:
               mono-devel
             sudo apt-get autoremove -y
             sudo apt-get clean
-
+      - uses: actions/checkout@v4
       - name: Download file from Sciebo
         env:
           SCIEBO_USERNAME: ${{ secrets.SCIEBO_USERNAME }}
