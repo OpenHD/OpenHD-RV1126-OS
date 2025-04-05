@@ -94,8 +94,9 @@ jobs:
 
       - name: Fix ownership before build
         run: |
-          sudo chown -R $(whoami):$(id -gn) ${{ github.workspace }}
-      
+          sudo docker load
+          sudo docker run -it --rm buildroot-env:fully-loaded bash -c "/buildroot/build.sh"
+
       - name: build
         run: |
           echo "BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y" >> buildroot/.config
