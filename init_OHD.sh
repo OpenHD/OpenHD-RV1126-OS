@@ -11,7 +11,7 @@ SCIEBO_USERNAME="$1"
 SCIEBO_PASSWORD="$2"
 
 # File path in Sciebo
-FILE_PATH="https://uni-wuppertal.sciebo.de/remote.php/webdav/openhd/X21/home_runner_backup.tar.gz"
+FILE_PATH="https://uni-wuppertal.sciebo.de/remote.php/webdav/openhd/X21/buildroot-env-fully-loaded.tar.gz"
 
 # Download the file
 echo "Downloading file from Sciebo..."
@@ -27,4 +27,5 @@ fi
 
 # Extract the tar.gz file while preserving permissions
 echo "Extracting the file..."
-sudo tar -xpzf home_runner_backup.tar.gz -C /
+sudo tar -xpzf buildroot-env-fully-loaded.tar.gz -C /
+ls -a
