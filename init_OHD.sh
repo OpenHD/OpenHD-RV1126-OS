@@ -28,5 +28,4 @@ fi
 # Extract the tar.gz file while preserving permissions
 echo "Extracting the file..."
 sudo tar -xpzf buildroot-env-fully-loaded.tar.gz -C /
-gunzip -c buildroot-env-fully-loaded.tar.gz 
 rm -Rf buildroot-env-fully-loaded.tar.gz
