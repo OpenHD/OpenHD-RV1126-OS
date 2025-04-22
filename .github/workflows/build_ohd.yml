@@ -10,77 +10,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 101
-          swap-size-mb: 200
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
-          overprovision-lvm: 'true'
-
-      - name: Strip runner to Docker-only baseline
-        run: |
-            echo "Doing aggressive but safe cleanup..."
-        
-            # Purge unneeded packages (avoid core system libs)
-            sudo apt-get purge -y \
-              '^llvm-.*' \
-              'php.*' \
-              '^mongodb-.*' \
-              '^mysql-.*' \
-              azure-cli \
-              google-chrome-stable \
-              firefox \
-              powershell \
-              microsoft-edge-stable \
-              mono-devel \
-              dotnet* \
-              nodejs* \
-              npm \
-              ruby* \
-              ghc* \
-              cabal-install* \
-              zulu* \
-              openjdk* \
-              temurin* \
-              mysql* \
-              mssql* \
-              *clang* \
-              libboost* \
-              python3.*-dev \
-              build-essential || true
-        
-            # Don't remove libc or system libraries!
-            # Clean up hosted tool cache safely
-            sudo rm -rf /opt/hostedtoolcache/*
-        
-            # Kill dev and lang-specific caches
-            rm -rf ~/.npm ~/.cache ~/.yarn ~/.cargo ~/.gem ~/.local ~/.dotnet
-        
-            # Remove docs and extra locales safely
-            sudo rm -rf /usr/share/doc/*
-            sudo rm -rf /usr/share/info/*
-            sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' -exec rm -rf {} +
-        
-            # Leave man pages for now (libc sometimes still references them during triggers)
-            # sudo rm -rf /usr/share/man/*
-        
-            # Clean apt cache
-            sudo apt-get autoremove -y || true
-            sudo apt-get clean
-        
-            echo "Cleanup complete. Current disk usage:"
-            df -h
-        
-        
-
       - uses: actions/checkout@v4
 
       - name: Download file from Sciebo
