@@ -13,7 +13,7 @@
   "dependencies": {
     "@angular-builders/custom-webpack": "^8.4.1",
     "@angular/animations": "~9.0.2",
-    "@angular/common": "~9.0.2",
+    "@angular/common": "~19.2.16",
     "@angular/compiler": "~9.0.2",
     "@angular/core": "~9.0.2",
     "@angular/forms": "~9.0.2",
